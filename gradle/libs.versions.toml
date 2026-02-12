@@ -11,6 +11,7 @@ lifecycle = "2.10.0"
 activity-compose = "1.12.3"
 compose-bom = "2026.01.01"
 kotlin = "2.3.10"
+ksp = "2.3.5"
 
 [libraries]
 # Kotlin & Coroutines
@@ -51,3 +52,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 org-jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "2.3.10" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
