@@ -53,7 +53,7 @@ class CatalogDatabaseDownloader(
         authToken: OpenIDToken,
         updateProgress: suspend (Double?) -> Unit
     ): File? = withContext(Dispatchers.IO) {
-        val dataStoreDir = catalogDatabase.getDataStoreDir()
+        val dataStoreDir = catalogDatabase.dataStoreDir
         val databaseFileName = catalogDatabase.getDatabaseFileName(event, type)
         val databaseFile = File(dataStoreDir, databaseFileName)
 

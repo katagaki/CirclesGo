@@ -42,7 +42,7 @@ class CatalogDatabase(private val context: Context) {
     private val _circleImagesLoadCount = MutableStateFlow(0)
     val circleImagesLoadCount: StateFlow<Int> = _circleImagesLoadCount
 
-    private val dataStoreDir: File
+    val dataStoreDir: File
         get() = File(context.filesDir, "databases")
 
     // MARK: Database Connection
@@ -172,8 +172,6 @@ class CatalogDatabase(private val context: Context) {
         val imageFile = File(dir, "webcatalog${event.number}Image1.db")
         return textFile.exists() && imageFile.exists()
     }
-
-    fun getDataStoreDir(): File = dataStoreDir
 
     fun getDatabaseFileName(event: WebCatalogEvent.Response.Event, type: DatabaseType): String {
         val suffix = when (type) {
