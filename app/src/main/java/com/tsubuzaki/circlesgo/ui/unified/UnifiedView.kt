@@ -15,7 +15,6 @@ import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
@@ -23,9 +22,11 @@ import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
+import com.tsubuzaki.circlesgo.state.Oasis
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.map.MapView
+import com.tsubuzaki.circlesgo.ui.shared.ProgressOverlay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,10 +38,10 @@ fun UnifiedView(
     events: Events,
     favorites: FavoritesState,
     catalogCache: CatalogCache,
+    oasis: Oasis,
     onLogout: () -> Unit
 ) {
     val isGoingToSignOut by unifier.isGoingToSignOut.collectAsState()
-    val scope = rememberCoroutineScope()
 
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
@@ -49,6 +50,8 @@ fun UnifiedView(
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = bottomSheetState
     )
+
+    Box(modifier = Modifier.fillMaxSize()) {
 
     // Sign out dialog
     if (isGoingToSignOut) {
@@ -117,4 +120,9 @@ fun UnifiedView(
             )
         }
     }
+
+    // Progress overlay (shown during database download/loading)
+    ProgressOverlay(oasis = oasis)
+
+    } // end outer Box
 }
