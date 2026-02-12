@@ -4,14 +4,19 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.tsubuzaki.circlesgo.auth.Authenticator
+import com.tsubuzaki.circlesgo.database.CatalogDatabase
+import com.tsubuzaki.circlesgo.state.Events
+import com.tsubuzaki.circlesgo.state.FavoritesState
+import com.tsubuzaki.circlesgo.state.Mapper
+import com.tsubuzaki.circlesgo.state.Unifier
+import com.tsubuzaki.circlesgo.state.UserSelections
+import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 
 class MainActivity : ComponentActivity() {
 
@@ -20,18 +25,33 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val database = CatalogDatabase(this)
+        val mapper = Mapper()
+        val selections = UserSelections(this)
+        val events = Events(this)
+        val favorites = FavoritesState()
+        val unifier = Unifier()
+
         setContent {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("CiRCLES")
-                    }
+                    UnifiedView(
+                        unifier = unifier,
+                        mapper = mapper,
+                        database = database,
+                        selections = selections,
+                        events = events,
+                        favorites = favorites,
+                        onLogout = {
+                            database.delete()
+                            selections.resetSelections()
+                            unifier.close()
+                            authenticator?.resetAuthentication()
+                        }
+                    )
                 }
             }
         }
