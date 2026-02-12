@@ -10,7 +10,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.tsubuzaki.circlesgo.auth.Authenticator
+import kotlinx.coroutines.launch
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
@@ -40,6 +42,8 @@ class MainActivity : ComponentActivity() {
         val favorites = FavoritesState()
         val unifier = Unifier()
         val catalogCache = CatalogCache()
+
+        handleDeepLink(intent)
 
         setContent {
             MaterialTheme {
@@ -78,10 +82,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Handle OAuth callback
+        handleDeepLink(intent)
+    }
+
+    private fun handleDeepLink(intent: Intent) {
         intent.data?.let { uri ->
             if (uri.scheme == "circles-app") {
-                authenticator?.getAuthenticationCode(uri)
+                val gotCode = authenticator?.getAuthenticationCode(uri) ?: false
+                if (gotCode) {
+                    lifecycleScope.launch {
+                        authenticator?.getAuthenticationToken()
+                    }
+                }
             }
         }
     }

@@ -161,14 +161,16 @@ class Authenticator(
         _isAuthenticating.value = true
     }
 
-    fun getAuthenticationCode(uri: Uri) {
+    fun getAuthenticationCode(uri: Uri): Boolean {
         val codeParam = uri.getQueryParameter("code")
         val stateParam = uri.getQueryParameter("state")
 
         if (codeParam != null && stateParam == "auth") {
             this.code = codeParam
             _isWaitingForAuthenticationCode.value = false
+            return true
         }
+        return false
     }
 
     suspend fun getAuthenticationToken() {
