@@ -50,6 +50,11 @@ kotlin {
     jvmToolchain(17)
 }
 
+ksp {
+    arg("room.schemaLocation", "${projectDir}/schemas")
+    arg("room.generateKotlin", "true")
+}
+
 dependencies {
     // Kotlin & Coroutines
     implementation(libs.kotlinx.coroutines.android)
