@@ -14,8 +14,10 @@ class FavoritesState {
     private val _items = MutableStateFlow<List<UserFavorites.Response.FavoriteItem>?>(null)
     val items: StateFlow<List<UserFavorites.Response.FavoriteItem>?> = _items
 
-    private val _wcIDMappedItems = MutableStateFlow<Map<Int, UserFavorites.Response.FavoriteItem>?>(null)
-    val wcIDMappedItems: StateFlow<Map<Int, UserFavorites.Response.FavoriteItem>?> = _wcIDMappedItems
+    private val _wcIDMappedItems =
+        MutableStateFlow<Map<Int, UserFavorites.Response.FavoriteItem>?>(null)
+    val wcIDMappedItems: StateFlow<Map<Int, UserFavorites.Response.FavoriteItem>?> =
+        _wcIDMappedItems
 
     private val _circles = MutableStateFlow<Map<String, List<ComiketCircle>>?>(null)
     val circles: StateFlow<Map<String, List<ComiketCircle>>?> = _circles

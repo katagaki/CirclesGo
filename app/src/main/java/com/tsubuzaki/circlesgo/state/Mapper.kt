@@ -115,6 +115,7 @@ class Mapper {
                     yMin + scaledSpaceSize
                 )
             }
+
             LayoutType.A_ON_TOP, LayoutType.A_ON_BOTTOM -> {
                 val rectHeight = scaledSpaceSize / count.toFloat()
                 RectF(

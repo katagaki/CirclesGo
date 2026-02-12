@@ -58,6 +58,7 @@ fun CircleList(
                             modifier = Modifier.padding(start = 100.dp)
                         )
                     }
+
                     ListDisplayMode.COMPACT -> {
                         CircleListCompactRow(
                             circle = circle,

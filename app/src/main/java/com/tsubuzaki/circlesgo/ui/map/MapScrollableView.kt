@@ -1,7 +1,6 @@
 package com.tsubuzaki.circlesgo.ui.map
 
 import android.graphics.PointF
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box

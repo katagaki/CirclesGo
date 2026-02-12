@@ -33,7 +33,10 @@ data class ComiketCircleExtendedInformation(
             )
         }
 
-        fun fromJoinedCursor(cursor: Cursor, extendedTablePrefix: String = ""): ComiketCircleExtendedInformation {
+        fun fromJoinedCursor(
+            cursor: Cursor,
+            extendedTablePrefix: String = ""
+        ): ComiketCircleExtendedInformation {
             val twitterString = cursor.getString(cursor.getColumnIndexOrThrow("twitterURL"))
             val pixivString = cursor.getString(cursor.getColumnIndexOrThrow("pixivURL"))
             val portalString = cursor.getString(cursor.getColumnIndexOrThrow("CirclemsPortalURL"))

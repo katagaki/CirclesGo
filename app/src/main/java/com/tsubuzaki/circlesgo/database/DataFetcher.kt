@@ -4,7 +4,6 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.tsubuzaki.circlesgo.database.tables.ComiketLayout
 import com.tsubuzaki.circlesgo.database.tables.LayoutCatalogMapping
-import com.tsubuzaki.circlesgo.database.types.LayoutType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -329,28 +328,29 @@ class DataFetcher(private val database: SQLiteDatabase?) {
         }
     }
 
-    suspend fun circlesWithWebCatalogIDs(webCatalogIDs: List<Int>): List<Int> = withContext(Dispatchers.IO) {
-        val db = database ?: return@withContext emptyList()
-        if (webCatalogIDs.isEmpty()) return@withContext emptyList()
-        try {
-            val placeholders = webCatalogIDs.joinToString(",") { "?" }
-            val args = webCatalogIDs.map { it.toString() }.toTypedArray()
-            val cursor = db.rawQuery(
-                "SELECT id FROM ComiketCircleExtend WHERE WCId IN ($placeholders)",
-                args
-            )
-            val result = mutableListOf<Int>()
-            cursor.use {
-                while (it.moveToNext()) {
-                    result.add(it.getInt(0))
+    suspend fun circlesWithWebCatalogIDs(webCatalogIDs: List<Int>): List<Int> =
+        withContext(Dispatchers.IO) {
+            val db = database ?: return@withContext emptyList()
+            if (webCatalogIDs.isEmpty()) return@withContext emptyList()
+            try {
+                val placeholders = webCatalogIDs.joinToString(",") { "?" }
+                val args = webCatalogIDs.map { it.toString() }.toTypedArray()
+                val cursor = db.rawQuery(
+                    "SELECT id FROM ComiketCircleExtend WHERE WCId IN ($placeholders)",
+                    args
+                )
+                val result = mutableListOf<Int>()
+                cursor.use {
+                    while (it.moveToNext()) {
+                        result.add(it.getInt(0))
+                    }
                 }
+                result
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch circles by web catalog IDs", e)
+                emptyList()
             }
-            result
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch circles by web catalog IDs", e)
-            emptyList()
         }
-    }
 
     suspend fun webCatalogIDs(circleIDs: List<Int>): List<Int> = withContext(Dispatchers.IO) {
         val db = database ?: return@withContext emptyList()
@@ -375,33 +375,34 @@ class DataFetcher(private val database: SQLiteDatabase?) {
         }
     }
 
-    suspend fun spaceNumberSuffixes(webCatalogIDs: List<Int>): Map<Int, Int> = withContext(Dispatchers.IO) {
-        val db = database ?: return@withContext webCatalogIDs.associateWith { 0 }
-        if (webCatalogIDs.isEmpty()) return@withContext emptyMap()
-        try {
-            val placeholders = webCatalogIDs.joinToString(",") { "?" }
-            val args = webCatalogIDs.map { it.toString() }.toTypedArray()
-            val cursor = db.rawQuery(
-                """
+    suspend fun spaceNumberSuffixes(webCatalogIDs: List<Int>): Map<Int, Int> =
+        withContext(Dispatchers.IO) {
+            val db = database ?: return@withContext webCatalogIDs.associateWith { 0 }
+            if (webCatalogIDs.isEmpty()) return@withContext emptyMap()
+            try {
+                val placeholders = webCatalogIDs.joinToString(",") { "?" }
+                val args = webCatalogIDs.map { it.toString() }.toTypedArray()
+                val cursor = db.rawQuery(
+                    """
                 SELECT e.WCId, c.spaceNoSub
                 FROM ComiketCircleWC c
                 INNER JOIN ComiketCircleExtend e ON c.id = e.id
                 WHERE e.WCId IN ($placeholders)
                 """.trimIndent(),
-                args
-            )
-            val result = mutableMapOf<Int, Int>()
-            cursor.use {
-                while (it.moveToNext()) {
-                    result[it.getInt(0)] = it.getInt(1)
+                    args
+                )
+                val result = mutableMapOf<Int, Int>()
+                cursor.use {
+                    while (it.moveToNext()) {
+                        result[it.getInt(0)] = it.getInt(1)
+                    }
                 }
+                result
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch space number suffixes", e)
+                webCatalogIDs.associateWith { 0 }
             }
-            result
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch space number suffixes", e)
-            webCatalogIDs.associateWith { 0 }
         }
-    }
 
     suspend fun mapID(blockID: Int): Int? = withContext(Dispatchers.IO) {
         val db = database ?: return@withContext null

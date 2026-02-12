@@ -37,6 +37,7 @@ fun DisplayModeSwitcher(
                 imageVector = Icons.AutoMirrored.Filled.ViewList,
                 contentDescription = "Switch to list"
             )
+
             CircleDisplayMode.LIST -> Icon(
                 imageVector = Icons.Filled.GridView,
                 contentDescription = "Switch to grid"
@@ -58,10 +59,12 @@ fun GridModeSwitcher(
                 imageVector = Icons.Filled.ViewModule,
                 contentDescription = "Grid size: Big"
             )
+
             GridDisplayMode.MEDIUM -> Icon(
                 imageVector = Icons.Filled.GridView,
                 contentDescription = "Grid size: Medium"
             )
+
             GridDisplayMode.SMALL -> Icon(
                 imageVector = Icons.Filled.ViewComfy,
                 contentDescription = "Grid size: Small"
@@ -114,6 +117,7 @@ fun ListModeSwitcher(
                 imageVector = Icons.Filled.ViewCompact,
                 contentDescription = "Switch to compact list"
             )
+
             ListDisplayMode.COMPACT -> Icon(
                 imageVector = Icons.AutoMirrored.Filled.ViewList,
                 contentDescription = "Switch to regular list"

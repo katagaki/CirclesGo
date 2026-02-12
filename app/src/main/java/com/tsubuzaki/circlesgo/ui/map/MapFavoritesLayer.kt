@@ -52,9 +52,11 @@ fun MapFavoritesLayer(
             }
 
             // Build layout -> (wcID -> color) mapping
-            val layoutFavorites = mutableMapOf<LayoutCatalogMapping, MutableMap<Int, WebCatalogColor?>>()
+            val layoutFavorites =
+                mutableMapOf<LayoutCatalogMapping, MutableMap<Int, WebCatalogColor?>>()
             for ((layout, ids) in layouts) {
-                layoutFavorites[layout] = ids.associateWith { null as WebCatalogColor? }.toMutableMap()
+                layoutFavorites[layout] =
+                    ids.associateWith { null as WebCatalogColor? }.toMutableMap()
             }
             for ((wcID, item) in favoriteItems) {
                 val layout = wcIDToLayout[wcID] ?: continue
@@ -117,11 +119,22 @@ fun getGenericRect(layout: LayoutCatalogMapping, index: Int, total: Int, spaceSi
     return when (layout.layoutType) {
         LayoutType.A_ON_LEFT, LayoutType.A_ON_RIGHT, LayoutType.UNKNOWN -> {
             val rectWidth = castSpaceSize / total.toFloat()
-            RectF(baseX + idx * rectWidth, baseY, baseX + idx * rectWidth + rectWidth, baseY + castSpaceSize)
+            RectF(
+                baseX + idx * rectWidth,
+                baseY,
+                baseX + idx * rectWidth + rectWidth,
+                baseY + castSpaceSize
+            )
         }
+
         LayoutType.A_ON_TOP, LayoutType.A_ON_BOTTOM -> {
             val rectHeight = castSpaceSize / total.toFloat()
-            RectF(baseX, baseY + idx * rectHeight, baseX + castSpaceSize, baseY + idx * rectHeight + rectHeight)
+            RectF(
+                baseX,
+                baseY + idx * rectHeight,
+                baseX + castSpaceSize,
+                baseY + idx * rectHeight + rectHeight
+            )
         }
     }
 }

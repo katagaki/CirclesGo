@@ -33,7 +33,9 @@ class Events(private val context: Context) {
 
     var isActiveEventLatest: Boolean
         get() = prefs.getBoolean(ACTIVE_EVENT_IS_LATEST_KEY, false)
-        set(value) { prefs.edit().putBoolean(ACTIVE_EVENT_IS_LATEST_KEY, value).apply() }
+        set(value) {
+            prefs.edit().putBoolean(ACTIVE_EVENT_IS_LATEST_KEY, value).apply()
+        }
 
     suspend fun prepare(authToken: OpenIDToken) {
         if (eventData != null && latestEvent != null) {
@@ -69,13 +71,15 @@ class Events(private val context: Context) {
                     )
                 }
             }
+
             OnlineState.OFFLINE -> {
                 _activeEvent.value = WebCatalogEvent.Response.Event(
                     id = activeEventNumber,
                     number = activeEventNumber
                 )
             }
-            OnlineState.UNDETERMINED -> { }
+
+            OnlineState.UNDETERMINED -> {}
         }
     }
 
@@ -93,7 +97,11 @@ class Events(private val context: Context) {
     fun setParticipation(day: Int, value: String) {
         val participationJson = prefs.getString(PARTICIPATION_KEY, null)
         val json = if (participationJson != null) {
-            try { JSONObject(participationJson) } catch (e: Exception) { JSONObject() }
+            try {
+                JSONObject(participationJson)
+            } catch (e: Exception) {
+                JSONObject()
+            }
         } else {
             JSONObject()
         }

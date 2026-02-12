@@ -32,23 +32,24 @@ object UserAPI {
         }
     }
 
-    suspend fun events(authToken: OpenIDToken): List<UserCircle.Response.Circle> = withContext(Dispatchers.IO) {
-        try {
-            val connection = urlRequestForUserAPI("Circles", authToken)
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseBody = connection.inputStream.bufferedReader().readText()
-                val userCircles = json.decodeFromString(UserCircle.serializer(), responseBody)
-                userCircles.response.circles
-            } else {
-                Log.e(TAG, "Failed to fetch user events: HTTP $responseCode")
+    suspend fun events(authToken: OpenIDToken): List<UserCircle.Response.Circle> =
+        withContext(Dispatchers.IO) {
+            try {
+                val connection = urlRequestForUserAPI("Circles", authToken)
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val responseBody = connection.inputStream.bufferedReader().readText()
+                    val userCircles = json.decodeFromString(UserCircle.serializer(), responseBody)
+                    userCircles.response.circles
+                } else {
+                    Log.e(TAG, "Failed to fetch user events: HTTP $responseCode")
+                    emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to fetch user events", e)
                 emptyList()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch user events", e)
-            emptyList()
         }
-    }
 
     private fun urlRequestForUserAPI(endpoint: String, authToken: OpenIDToken): HttpURLConnection {
         val url = URL("${Endpoints.circleMsAPIEndpoint}/User/$endpoint/")

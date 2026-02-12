@@ -9,13 +9,10 @@ import com.tsubuzaki.circlesgo.network.Downloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import java.io.BufferedInputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.ZipInputStream
 
 class CatalogDatabaseDownloader(
     private val catalogDatabase: CatalogDatabase
@@ -94,7 +91,7 @@ class CatalogDatabaseDownloader(
         updateProgress(null)
 
         // Unzip the file
-        unzip(zippedFile, dataStoreDir)
+        unzip(zippedFile, dataStoreDir, updateProgress)
     }
 
     private suspend fun fetchDatabaseInformation(
@@ -125,30 +122,46 @@ class CatalogDatabaseDownloader(
         }
     }
 
-    private fun unzip(zipFile: File, destinationDir: File): File? {
+    private suspend fun unzip(
+        zipFile: File,
+        destinationDir: File,
+        updateProgress: suspend (Double?) -> Unit
+    ): File? {
         return try {
             var extractedFile: File? = null
-            ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
-                var entry = zis.nextEntry
-                while (entry != null) {
+            java.util.zip.ZipFile(zipFile).use { zip ->
+                val entries = zip.entries().asSequence().toList()
+                val totalSize = entries.filter { !it.isDirectory }.sumOf { it.size }.toDouble()
+                var extractedSize = 0.0
+
+                for (entry in entries) {
                     val outFile = File(destinationDir, entry.name)
                     // Guard against zip slip
                     if (!outFile.canonicalPath.startsWith(destinationDir.canonicalPath)) {
-                        throw SecurityException("Zip entry outside target directory: ${entry.name}")
+                        throw SecurityException("Zip entry outside target directory: ${'$'}{entry.name}")
                     }
-                    if (extractedFile == null) {
-                        extractedFile = outFile
-                    }
-                    outFile.parentFile?.mkdirs()
-                    FileOutputStream(outFile).use { fos ->
-                        val buffer = ByteArray(8192)
-                        var len: Int
-                        while (zis.read(buffer).also { len = it } != -1) {
-                            fos.write(buffer, 0, len)
+
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        if (extractedFile == null) {
+                            extractedFile = outFile
+                        }
+                        outFile.parentFile?.mkdirs()
+                        zip.getInputStream(entry).use { input ->
+                            FileOutputStream(outFile).use { output ->
+                                val buffer = ByteArray(8192)
+                                var len: Int
+                                while (input.read(buffer).also { len = it } != -1) {
+                                    output.write(buffer, 0, len)
+                                    extractedSize += len
+                                    if (totalSize > 0) {
+                                        updateProgress(extractedSize / totalSize)
+                                    }
+                                }
+                            }
                         }
                     }
-                    zis.closeEntry()
-                    entry = zis.nextEntry
                 }
             }
             // Clean up the zip file

@@ -57,12 +57,14 @@ class UserSelections(context: Context) {
 
     fun setBlocks(blocks: Set<ComiketBlock>) {
         _blocks.value = blocks
-        prefs.edit().putStringSet(SELECTED_BLOCKS_KEY, blocks.map { it.id.toString() }.toSet()).apply()
+        prefs.edit().putStringSet(SELECTED_BLOCKS_KEY, blocks.map { it.id.toString() }.toSet())
+            .apply()
     }
 
     fun setGenres(genres: Set<ComiketGenre>) {
         _genres.value = genres
-        prefs.edit().putStringSet(SELECTED_GENRES_KEY, genres.map { it.id.toString() }.toSet()).apply()
+        prefs.edit().putStringSet(SELECTED_GENRES_KEY, genres.map { it.id.toString() }.toSet())
+            .apply()
     }
 
     fun reloadData(database: CatalogDatabase) {
@@ -71,8 +73,12 @@ class UserSelections(context: Context) {
         _date.value = database.dates().firstOrNull { it.id == dateID }
         _map.value = database.maps().firstOrNull { it.id == mapID }
 
-        val blockIDs = prefs.getStringSet(SELECTED_BLOCKS_KEY, emptySet())?.mapNotNull { it.toIntOrNull() } ?: emptyList()
-        val genreIDs = prefs.getStringSet(SELECTED_GENRES_KEY, emptySet())?.mapNotNull { it.toIntOrNull() } ?: emptyList()
+        val blockIDs =
+            prefs.getStringSet(SELECTED_BLOCKS_KEY, emptySet())?.mapNotNull { it.toIntOrNull() }
+                ?: emptyList()
+        val genreIDs =
+            prefs.getStringSet(SELECTED_GENRES_KEY, emptySet())?.mapNotNull { it.toIntOrNull() }
+                ?: emptyList()
         _blocks.value = database.blocks().filter { it.id in blockIDs }.toSet()
         _genres.value = database.genres().filter { it.id in genreIDs }.toSet()
     }

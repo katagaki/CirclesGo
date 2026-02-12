@@ -116,6 +116,7 @@ fun CatalogView(
                         onModeChanged = { gridDisplayMode = it }
                     )
                 }
+
                 CircleDisplayMode.LIST -> {
                     ListModeSwitcher(
                         mode = listDisplayMode,
@@ -177,7 +178,8 @@ fun CatalogView(
                 }
             } else {
                 val circlesToShow = searchedCircles ?: displayedCircles
-                val hasNoFilter = selectedGenres.isEmpty() && selectedMap == null && searchedCircles == null
+                val hasNoFilter =
+                    selectedGenres.isEmpty() && selectedMap == null && searchedCircles == null
 
                 if (hasNoFilter) {
                     Box(
@@ -209,6 +211,7 @@ fun CatalogView(
                                     }
                                 )
                             }
+
                             CircleDisplayMode.LIST -> {
                                 CircleList(
                                     circles = circlesToShow,

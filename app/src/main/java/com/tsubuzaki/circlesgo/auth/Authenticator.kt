@@ -81,7 +81,8 @@ class Authenticator(
     // MARK: Reachability
 
     fun setupReachability() {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
@@ -111,7 +112,8 @@ class Authenticator(
 
     fun teardownReachability() {
         networkCallback?.let {
-            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivityManager.unregisterNetworkCallback(it)
             networkCallback = null
         }
@@ -209,33 +211,35 @@ class Authenticator(
         }
     }
 
-    private suspend fun performTokenRequest(parameters: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val url = URL("${Endpoints.circleMsAuthEndpoint}/OAuth2/Token")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            connection.connectTimeout = 2000
-            connection.doOutput = true
+    private suspend fun performTokenRequest(parameters: Map<String, String>): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val url = URL("${Endpoints.circleMsAuthEndpoint}/OAuth2/Token")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "POST"
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                connection.connectTimeout = 2000
+                connection.doOutput = true
 
-            val body = parameters.entries.joinToString("&") { (key, value) ->
-                "$key=${URLEncoder.encode(value, "UTF-8")}"
-            }
-            connection.outputStream.use { it.write(body.toByteArray()) }
+                val body = parameters.entries.joinToString("&") { (key, value) ->
+                    "$key=${URLEncoder.encode(value, "UTF-8")}"
+                }
+                connection.outputStream.use { it.write(body.toByteArray()) }
 
-            val responseCode = connection.responseCode
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val responseBody = BufferedReader(InputStreamReader(connection.inputStream)).readText()
-                decodeAuthenticationToken(responseBody)
-            } else {
-                Log.e(TAG, "Token request failed: HTTP $responseCode")
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val responseBody =
+                        BufferedReader(InputStreamReader(connection.inputStream)).readText()
+                    decodeAuthenticationToken(responseBody)
+                } else {
+                    Log.e(TAG, "Token request failed: HTTP $responseCode")
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Token request failed", e)
                 false
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Token request failed", e)
-            false
         }
-    }
 
     private fun decodeAuthenticationToken(responseBody: String): Boolean {
         return try {

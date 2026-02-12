@@ -178,8 +178,14 @@ private fun calculatePopoverPosition(
     var posY: Float
 
     when {
-        nearTop && canFitBelow -> { posX = cx; posY = cy + minOffY }
-        nearBottom && canFitAbove -> { posX = cx; posY = cy - minOffY }
+        nearTop && canFitBelow -> {
+            posX = cx; posY = cy + minOffY
+        }
+
+        nearBottom && canFitAbove -> {
+            posX = cx; posY = cy - minOffY
+        }
+
         canFitRight -> {
             posX = cx + minOffX; posY = cy
             if (posY + effectiveHeight / 2 > canvasHeight - pad)
@@ -187,6 +193,7 @@ private fun calculatePopoverPosition(
             if (posY - effectiveHeight / 2 < pad)
                 posY = pad + effectiveHeight / 2
         }
+
         canFitLeft -> {
             posX = cx - minOffX; posY = cy
             if (posY + effectiveHeight / 2 > canvasHeight - pad)
@@ -194,9 +201,18 @@ private fun calculatePopoverPosition(
             if (posY - effectiveHeight / 2 < pad)
                 posY = pad + effectiveHeight / 2
         }
-        canFitBelow -> { posX = cx; posY = cy + minOffY }
-        canFitAbove -> { posX = cx; posY = cy - minOffY }
-        else -> { posX = cx + minOffX; posY = cy }
+
+        canFitBelow -> {
+            posX = cx; posY = cy + minOffY
+        }
+
+        canFitAbove -> {
+            posX = cx; posY = cy - minOffY
+        }
+
+        else -> {
+            posX = cx + minOffX; posY = cy
+        }
     }
 
     posX = posX.coerceIn(pad + pw / 2, canvasWidth - pad - pw / 2)

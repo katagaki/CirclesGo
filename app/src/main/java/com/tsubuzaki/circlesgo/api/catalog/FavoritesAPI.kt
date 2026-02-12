@@ -20,9 +20,9 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
     }
 
     suspend fun all(authToken: OpenIDToken): Pair<
-        List<UserFavorites.Response.FavoriteItem>,
-        Map<Int, UserFavorites.Response.FavoriteItem>
-    > = withContext(Dispatchers.IO) {
+            List<UserFavorites.Response.FavoriteItem>,
+            Map<Int, UserFavorites.Response.FavoriteItem>
+            > = withContext(Dispatchers.IO) {
         try {
             val connection = urlRequestForReadersAPI("FavoriteCircles", authToken = authToken)
             val responseCode = connection.responseCode
@@ -51,9 +51,9 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
     }
 
     private suspend fun loadCachedFavorites(): Pair<
-        List<UserFavorites.Response.FavoriteItem>,
-        Map<Int, UserFavorites.Response.FavoriteItem>
-    > {
+            List<UserFavorites.Response.FavoriteItem>,
+            Map<Int, UserFavorites.Response.FavoriteItem>
+            > {
         val cached = favoriteDao.getAll()
         val items = cached.map { it.toFavoriteItem() }
         val wcIDMappedItems = items.associateBy { it.circle.webCatalogID }
@@ -73,11 +73,13 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
                 "color" to color.value.toString(),
                 "memo" to memo
             )
-            val connection = urlRequestForReadersAPI("Favorite", parameters = params, authToken = authToken)
+            val connection =
+                urlRequestForReadersAPI("Favorite", parameters = params, authToken = authToken)
             val responseCode = connection.responseCode
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 val responseBody = connection.inputStream.bufferedReader().readText()
-                val response = json.decodeFromString(UserCircleWithFavorite.serializer(), responseBody)
+                val response =
+                    json.decodeFromString(UserCircleWithFavorite.serializer(), responseBody)
                 if (response.status == "success") {
                     val circle = response.response.circle
                     val favorite = response.response.favorite

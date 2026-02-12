@@ -41,6 +41,7 @@ fun CircleBlockPill(
                     modifier = Modifier.padding(vertical = 2.dp, horizontal = 10.dp)
                 )
             }
+
             CircleBlockPillSize.SMALL -> {
                 Text(
                     text = text,
@@ -49,6 +50,7 @@ fun CircleBlockPill(
                     modifier = Modifier.padding(vertical = 2.dp, horizontal = 6.dp)
                 )
             }
+
             CircleBlockPillSize.TINY -> {
                 Text(
                     text = text,

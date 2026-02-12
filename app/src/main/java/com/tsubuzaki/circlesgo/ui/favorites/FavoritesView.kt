@@ -93,6 +93,7 @@ fun FavoritesView(
                         onModeChanged = { gridDisplayMode = it }
                     )
                 }
+
                 CircleDisplayMode.LIST -> {
                     ListModeSwitcher(
                         mode = listDisplayMode,
@@ -168,6 +169,7 @@ fun FavoritesView(
                                     }
                                 )
                             }
+
                             CircleDisplayMode.LIST -> {
                                 ColorGroupedCircleList(
                                     groups = circleGroups,
@@ -198,6 +200,7 @@ fun FavoritesView(
                                     }
                                 )
                             }
+
                             CircleDisplayMode.LIST -> {
                                 CircleList(
                                     circles = flatCircles,

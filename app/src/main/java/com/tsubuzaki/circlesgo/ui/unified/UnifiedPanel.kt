@@ -1,11 +1,5 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,7 +42,8 @@ fun UnifiedPanel(
     val selectedCircle by unifier.selectedCircle.collectAsState()
 
     // Check if circle detail is showing (in sheet path stack)
-    val isShowingCircleDetail = sheetPath.lastOrNull() == UnifiedPath.CIRCLE_DETAIL && selectedCircle != null
+    val isShowingCircleDetail =
+        sheetPath.lastOrNull() == UnifiedPath.CIRCLE_DETAIL && selectedCircle != null
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (isShowingCircleDetail) {
@@ -99,12 +94,14 @@ fun UnifiedPanel(
                     unifier = unifier,
                     catalogCache = catalogCache
                 )
+
                 UnifiedPath.FAVORITES -> FavoritesView(
                     database = database,
                     favorites = favorites,
                     selections = selections,
                     unifier = unifier
                 )
+
                 else -> CatalogView(
                     database = database,
                     selections = selections,
