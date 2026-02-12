@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
+import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
         val events = Events(this)
         val favorites = FavoritesState()
         val unifier = Unifier()
+        val catalogCache = CatalogCache()
 
         setContent {
             MaterialTheme {
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
                         selections = selections,
                         events = events,
                         favorites = favorites,
+                        catalogCache = catalogCache,
                         onLogout = {
                             database.delete()
                             selections.resetSelections()

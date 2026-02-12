@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
+import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.MapAutoScrollType
@@ -45,6 +46,7 @@ fun UnifiedView(
     selections: UserSelections,
     events: Events,
     favorites: FavoritesState,
+    catalogCache: CatalogCache,
     onLogout: () -> Unit
 ) {
     val isGoingToSignOut by unifier.isGoingToSignOut.collectAsState()
@@ -100,7 +102,8 @@ fun UnifiedView(
                 database = database,
                 favorites = favorites,
                 selections = selections,
-                mapper = mapper
+                mapper = mapper,
+                catalogCache = catalogCache
             )
         },
         sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),

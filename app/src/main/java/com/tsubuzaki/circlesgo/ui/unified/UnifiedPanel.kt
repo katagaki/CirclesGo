@@ -17,12 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
+import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.UnifiedPath
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
+import com.tsubuzaki.circlesgo.ui.catalog.CatalogView
 
 @Composable
 fun UnifiedPanel(
@@ -31,7 +33,8 @@ fun UnifiedPanel(
     database: CatalogDatabase,
     favorites: FavoritesState,
     selections: UserSelections,
-    mapper: Mapper
+    mapper: Mapper,
+    catalogCache: CatalogCache
 ) {
     val currentPath by unifier.currentPath.collectAsState()
 
@@ -66,31 +69,24 @@ fun UnifiedPanel(
 
         // Content based on current path
         when (currentPath) {
-            UnifiedPath.CIRCLES -> CatalogPlaceholder()
+            UnifiedPath.CIRCLES -> CatalogView(
+                database = database,
+                selections = selections,
+                favorites = favorites,
+                mapper = mapper,
+                unifier = unifier,
+                catalogCache = catalogCache
+            )
             UnifiedPath.FAVORITES -> FavoritesPlaceholder()
-            else -> CatalogPlaceholder()
+            else -> CatalogView(
+                database = database,
+                selections = selections,
+                favorites = favorites,
+                mapper = mapper,
+                unifier = unifier,
+                catalogCache = catalogCache
+            )
         }
-    }
-}
-
-@Composable
-private fun CatalogPlaceholder() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Circles",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Text(
-            text = "Circle catalog will be displayed here.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
