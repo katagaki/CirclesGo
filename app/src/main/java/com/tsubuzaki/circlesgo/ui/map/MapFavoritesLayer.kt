@@ -81,10 +81,8 @@ fun MapFavoritesLayer(
 
                 for ((index, id) in orderedIDs.withIndex()) {
                     val color = mapping[id] ?: continue
-                    if (color != null) {
-                        val rect = getGenericRect(layout, index, count, spaceSize)
-                        result.getOrPut(color) { mutableListOf() }.add(rect)
-                    }
+                    val rect = getGenericRect(layout, index, count, spaceSize)
+                    result.getOrPut(color) { mutableListOf() }.add(rect)
                 }
             }
 
