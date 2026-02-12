@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -25,6 +24,7 @@ import com.tsubuzaki.circlesgo.state.UnifiedPath
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.catalog.CatalogView
+import com.tsubuzaki.circlesgo.ui.favorites.FavoritesView
 
 @Composable
 fun UnifiedPanel(
@@ -77,7 +77,11 @@ fun UnifiedPanel(
                 unifier = unifier,
                 catalogCache = catalogCache
             )
-            UnifiedPath.FAVORITES -> FavoritesPlaceholder()
+            UnifiedPath.FAVORITES -> FavoritesView(
+                database = database,
+                favorites = favorites,
+                selections = selections
+            )
             else -> CatalogView(
                 database = database,
                 selections = selections,
@@ -87,26 +91,5 @@ fun UnifiedPanel(
                 catalogCache = catalogCache
             )
         }
-    }
-}
-
-@Composable
-private fun FavoritesPlaceholder() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Favorites",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Text(
-            text = "Favorited circles will be displayed here.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
