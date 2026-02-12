@@ -7,7 +7,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
@@ -17,6 +18,7 @@ import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
+import com.tsubuzaki.circlesgo.ui.login.LoginView
 import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 
 class MainActivity : ComponentActivity() {
@@ -25,6 +27,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val client = Authenticator.loadClient(this)
+        val auth = Authenticator(this, client)
+        authenticator = auth
+        auth.setupReachability()
 
         val database = CatalogDatabase(this)
         val mapper = Mapper()
@@ -40,21 +47,30 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    UnifiedView(
-                        unifier = unifier,
-                        mapper = mapper,
-                        database = database,
-                        selections = selections,
-                        events = events,
-                        favorites = favorites,
-                        catalogCache = catalogCache,
-                        onLogout = {
-                            database.delete()
-                            selections.resetSelections()
-                            unifier.close()
-                            authenticator?.resetAuthentication()
-                        }
-                    )
+                    val isAuthenticating by auth.isAuthenticating.collectAsState()
+                    val token by auth.token.collectAsState()
+
+                    if (isAuthenticating || token == null) {
+                        LoginView(
+                            authURL = auth.authURL
+                        )
+                    } else {
+                        UnifiedView(
+                            unifier = unifier,
+                            mapper = mapper,
+                            database = database,
+                            selections = selections,
+                            events = events,
+                            favorites = favorites,
+                            catalogCache = catalogCache,
+                            onLogout = {
+                                database.delete()
+                                selections.resetSelections()
+                                unifier.close()
+                                auth.resetAuthentication()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -68,5 +84,10 @@ class MainActivity : ComponentActivity() {
                 authenticator?.getAuthenticationCode(uri)
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        authenticator?.teardownReachability()
     }
 }

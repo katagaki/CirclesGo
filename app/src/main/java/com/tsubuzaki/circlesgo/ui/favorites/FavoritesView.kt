@@ -37,6 +37,7 @@ import com.tsubuzaki.circlesgo.state.CircleDisplayMode
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.GridDisplayMode
 import com.tsubuzaki.circlesgo.state.ListDisplayMode
+import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.catalog.CircleGrid
 import com.tsubuzaki.circlesgo.ui.catalog.CircleList
@@ -52,7 +53,8 @@ import kotlinx.coroutines.launch
 fun FavoritesView(
     database: CatalogDatabase,
     favorites: FavoritesState,
-    selections: UserSelections
+    selections: UserSelections,
+    unifier: Unifier
 ) {
     val scope = rememberCoroutineScope()
     val favoriteCircles by favorites.circles.collectAsState()
@@ -162,7 +164,7 @@ fun FavoritesView(
                                     favorites = favorites,
                                     showsOverlayWhenEmpty = false,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }
@@ -174,7 +176,7 @@ fun FavoritesView(
                                     favorites = favorites,
                                     showsOverlayWhenEmpty = false,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }
@@ -192,7 +194,7 @@ fun FavoritesView(
                                     favorites = favorites,
                                     showsOverlayWhenEmpty = false,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }
@@ -204,7 +206,7 @@ fun FavoritesView(
                                     favorites = favorites,
                                     showsOverlayWhenEmpty = false,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }

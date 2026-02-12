@@ -1,5 +1,6 @@
 package com.tsubuzaki.circlesgo.state
 
+import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -21,6 +22,9 @@ class Unifier {
 
     private val _isGoingToSignOut = MutableStateFlow(false)
     val isGoingToSignOut: StateFlow<Boolean> = _isGoingToSignOut
+
+    private val _selectedCircle = MutableStateFlow<ComiketCircle?>(null)
+    val selectedCircle: StateFlow<ComiketCircle?> = _selectedCircle
 
     fun show() {
         _isPresenting.value = true
@@ -63,6 +67,15 @@ class Unifier {
 
     fun setIsGoingToSignOut(value: Boolean) {
         _isGoingToSignOut.value = value
+    }
+
+    fun showCircleDetail(circle: ComiketCircle) {
+        _selectedCircle.value = circle
+        append(UnifiedPath.CIRCLE_DETAIL)
+    }
+
+    fun clearCircleDetail() {
+        _selectedCircle.value = null
     }
 
     fun toggleSidebarPosition() {

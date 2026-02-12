@@ -205,7 +205,7 @@ fun CatalogView(
                                     database = database,
                                     favorites = favorites,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }
@@ -216,7 +216,7 @@ fun CatalogView(
                                     database = database,
                                     favorites = favorites,
                                     onSelect = { circle ->
-                                        // TODO: Navigate to circle detail
+                                        unifier.showCircleDetail(circle)
                                     }
                                 )
                             }
