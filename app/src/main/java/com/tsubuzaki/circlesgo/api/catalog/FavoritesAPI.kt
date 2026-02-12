@@ -3,8 +3,7 @@ package com.tsubuzaki.circlesgo.api.catalog
 import android.util.Log
 import com.tsubuzaki.circlesgo.api.Endpoints
 import com.tsubuzaki.circlesgo.api.auth.OpenIDToken
-import com.tsubuzaki.circlesgo.data.local.CirclesFavoriteDao
-import com.tsubuzaki.circlesgo.data.local.CirclesFavoriteEntity
+import com.tsubuzaki.circlesgo.data.local.FavoritesCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -12,7 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
+class FavoritesAPI(private val cache: FavoritesCache) {
 
     companion object {
         private const val TAG = "FavoritesAPI"
@@ -32,12 +31,8 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
                 val items = favorites.response.list.sortedBy { it.favorite.color }
                 val wcIDMappedItems = items.associateBy { it.circle.webCatalogID }
 
-                // Cache in Room
-                favoriteDao.deleteAll()
-                val entities = wcIDMappedItems.map { (webCatalogID, item) ->
-                    CirclesFavoriteEntity.fromFavoriteItem(webCatalogID, item)
-                }
-                favoriteDao.insertAll(entities)
+                // Cache locally
+                cache.save(items)
 
                 Pair(items, wcIDMappedItems)
             } else {
@@ -50,12 +45,11 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
         }
     }
 
-    private suspend fun loadCachedFavorites(): Pair<
+    private fun loadCachedFavorites(): Pair<
             List<UserFavorites.Response.FavoriteItem>,
             Map<Int, UserFavorites.Response.FavoriteItem>
             > {
-        val cached = favoriteDao.getAll()
-        val items = cached.map { it.toFavoriteItem() }
+        val items = cache.load()
         val wcIDMappedItems = items.associateBy { it.circle.webCatalogID }
         return Pair(items, wcIDMappedItems)
     }
@@ -88,9 +82,10 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
                             circle = circle,
                             favorite = favorite
                         )
-                        favoriteDao.insert(
-                            CirclesFavoriteEntity.fromFavoriteItem(webCatalogID, item)
-                        )
+                        val cached = cache.load().toMutableList()
+                        cached.removeAll { it.circle.webCatalogID == webCatalogID }
+                        cached.add(item)
+                        cache.save(cached)
                     }
                     true
                 } else {
@@ -126,7 +121,9 @@ class FavoritesAPI(private val favoriteDao: CirclesFavoriteDao) {
                 val responseBody = connection.inputStream.bufferedReader().readText()
                 val response = json.decodeFromString(UserResponse.serializer(), responseBody)
                 if (response.status == "success") {
-                    favoriteDao.deleteByWebCatalogID(webCatalogID)
+                    val cached = cache.load().toMutableList()
+                    cached.removeAll { it.circle.webCatalogID == webCatalogID }
+                    cache.save(cached)
                     true
                 } else {
                     false

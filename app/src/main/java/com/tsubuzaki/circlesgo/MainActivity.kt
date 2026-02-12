@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.tsubuzaki.circlesgo.api.catalog.FavoritesAPI
 import com.tsubuzaki.circlesgo.auth.Authenticator
-import com.tsubuzaki.circlesgo.data.local.CirclesDatabase
+import com.tsubuzaki.circlesgo.data.local.FavoritesCache
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.DataManager
@@ -52,8 +52,8 @@ class MainActivity : ComponentActivity() {
         val catalogCache = CatalogCache()
         val oasis = Oasis()
 
-        val circlesDb = CirclesDatabase.getInstance(this)
-        val favoritesAPI = FavoritesAPI(circlesDb.favoriteDao())
+        val favoritesCache = FavoritesCache(this)
+        val favoritesAPI = FavoritesAPI(favoritesCache)
 
         val dataManager = DataManager(
             context = this,

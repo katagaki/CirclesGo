@@ -1,24 +1,21 @@
 package com.tsubuzaki.circlesgo.data.repository
 
-import com.tsubuzaki.circlesgo.data.local.CirclesVisitEntryDao
-import com.tsubuzaki.circlesgo.data.local.CirclesVisitEntryEntity
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.tsubuzaki.circlesgo.data.local.VisitEntryCache
 
-class VisitRepository(private val visitEntryDao: CirclesVisitEntryDao) {
+class VisitRepository(private val visitEntryCache: VisitEntryCache) {
 
-    suspend fun toggleVisit(circleID: Int, eventNumber: Int) = withContext(Dispatchers.IO) {
-        val existingVisits = visitEntryDao.getVisits(eventNumber, circleID)
+    fun toggleVisit(circleID: Int, eventNumber: Int) {
+        val existingVisits = visitEntryCache.getVisits(eventNumber, circleID)
         if (existingVisits.isEmpty()) {
-            visitEntryDao.insert(
-                CirclesVisitEntryEntity(
+            visitEntryCache.insert(
+                VisitEntryCache.VisitEntry(
                     eventNumber = eventNumber,
                     circleID = circleID,
                     visitDate = System.currentTimeMillis()
                 )
             )
         } else {
-            visitEntryDao.delete(eventNumber, circleID)
+            visitEntryCache.delete(eventNumber, circleID)
         }
     }
 }
