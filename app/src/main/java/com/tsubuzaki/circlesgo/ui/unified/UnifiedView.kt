@@ -115,10 +115,8 @@ fun UnifiedView(
                     mapper = mapper,
                     selections = selections,
                     favorites = favorites,
-                    onCircleTapped = { circleID ->
-                        // Navigate to circle detail when tapped
-                        println(circleID)
-                        unifier.show()
+                    onCircleTapped = { circle ->
+                        unifier.showCircleDetail(circle)
                     }
                 )
             }
