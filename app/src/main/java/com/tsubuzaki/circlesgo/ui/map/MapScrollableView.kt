@@ -15,7 +15,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
+
+import androidx.compose.foundation.layout.requiredSize
 
 @Composable
 fun MapScrollableView(
@@ -23,8 +27,8 @@ fun MapScrollableView(
     onZoomChange: (Float) -> Unit,
     scrollToPosition: PointF?,
     onScrollCompleted: () -> Unit,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -36,9 +40,10 @@ fun MapScrollableView(
         currentZoom = zoomScale
     }
 
+    val density = LocalDensity.current
     fun getCoercedOffset(offset: Offset): Offset {
-        val zoomedWidth = canvasWidth * currentZoom
-        val zoomedHeight = canvasHeight * currentZoom
+        val zoomedWidth = with(density) { (canvasWidth * currentZoom).toPx() }
+        val zoomedHeight = with(density) { (canvasHeight * currentZoom).toPx() }
 
         val minX = (viewportSize.width - zoomedWidth).coerceAtMost(0f)
         val minY = (viewportSize.height - zoomedHeight).coerceAtMost(0f)
@@ -79,6 +84,7 @@ fun MapScrollableView(
     ) {
         Box(
             modifier = Modifier
+                .requiredSize(canvasWidth, canvasHeight)
                 .graphicsLayer(
                     scaleX = currentZoom,
                     scaleY = currentZoom,

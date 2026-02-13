@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.api.catalog.UserFavorites
 import com.tsubuzaki.circlesgo.api.catalog.WebCatalogColor
@@ -28,8 +29,8 @@ fun MapFavoritesLayer(
     layouts: Map<LayoutCatalogMapping, List<Int>>,
     favoriteItems: Map<Int, UserFavorites.Response.FavoriteItem>,
     spaceSize: Int,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     database: CatalogDatabase
 ) {
     var colorRects by remember { mutableStateOf<Map<WebCatalogColor, List<RectF>>>(emptyMap()) }
@@ -92,8 +93,8 @@ fun MapFavoritesLayer(
 
     Canvas(
         modifier = Modifier
-            .width(canvasWidth.dp)
-            .height(canvasHeight.dp)
+            .width(canvasWidth)
+            .height(canvasHeight)
     ) {
         for ((color, rects) in colorRects) {
             val composeColor = color.backgroundColor().copy(alpha = 0.5f)

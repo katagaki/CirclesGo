@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
@@ -46,8 +47,8 @@ import kotlinx.coroutines.withContext
 fun MapPopoverLayer(
     popoverData: PopoverData,
     zoomScale: Float,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     mapper: Mapper,
     database: CatalogDatabase,
     onCircleTapped: (Int) -> Unit
@@ -145,14 +146,17 @@ fun MapPopoverLayer(
 
 private fun calculatePopoverPosition(
     sourceRect: android.graphics.RectF,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     popoverWidth: Float,
     popoverHeight: Float,
     popoverDistance: Float,
     popoverEdgePadding: Float,
     zoomScale: Float
 ): PointF {
+    var cw = canvasWidth.value
+    var ch = canvasHeight.value
+
     val pw = popoverWidth / zoomScale
     val ph = popoverHeight / zoomScale
     val dist = popoverDistance / zoomScale
@@ -166,13 +170,13 @@ private fun calculatePopoverPosition(
     val minOffX = halfW + dist + (pw / 2)
     val minOffY = halfH + dist + (effectiveHeight / 2)
 
-    val canFitRight = canvasWidth - pad - (cx + minOffX + pw / 2) >= 0
+    val canFitRight = cw - pad - (cx + minOffX + pw / 2) >= 0
     val canFitLeft = (cx - minOffX - pw / 2) - pad >= 0
-    val canFitBelow = canvasHeight - pad - (cy + minOffY + effectiveHeight / 2) >= 0
+    val canFitBelow = ch - pad - (cy + minOffY + effectiveHeight / 2) >= 0
     val canFitAbove = (cy - minOffY - effectiveHeight / 2) - pad >= 0
 
-    val nearTop = cy < canvasHeight * 0.3f
-    val nearBottom = cy > canvasHeight * 0.7f
+    val nearTop = cy < ch * 0.3f
+    val nearBottom = cy > ch * 0.7f
 
     var posX: Float
     var posY: Float
@@ -188,16 +192,16 @@ private fun calculatePopoverPosition(
 
         canFitRight -> {
             posX = cx + minOffX; posY = cy
-            if (posY + effectiveHeight / 2 > canvasHeight - pad)
-                posY = canvasHeight - pad - effectiveHeight / 2
+            if (posY + effectiveHeight / 2 > ch - pad)
+                posY = ch - pad - effectiveHeight / 2
             if (posY - effectiveHeight / 2 < pad)
                 posY = pad + effectiveHeight / 2
         }
 
         canFitLeft -> {
             posX = cx - minOffX; posY = cy
-            if (posY + effectiveHeight / 2 > canvasHeight - pad)
-                posY = canvasHeight - pad - effectiveHeight / 2
+            if (posY + effectiveHeight / 2 > ch - pad)
+                posY = ch - pad - effectiveHeight / 2
             if (posY - effectiveHeight / 2 < pad)
                 posY = pad + effectiveHeight / 2
         }
@@ -215,8 +219,8 @@ private fun calculatePopoverPosition(
         }
     }
 
-    posX = posX.coerceIn(pad + pw / 2, canvasWidth - pad - pw / 2)
-    posY = posY.coerceIn(pad + effectiveHeight / 2, canvasHeight - pad - effectiveHeight / 2)
+    posX = posX.coerceIn(pad + pw / 2, cw - pad - pw / 2)
+    posY = posY.coerceIn(pad + effectiveHeight / 2, ch - pad - effectiveHeight / 2)
 
     return PointF(posX, posY)
 }

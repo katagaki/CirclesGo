@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.LayoutCatalogMapping
@@ -77,7 +78,7 @@ fun MapView(
     // Update canvas size when map image changes
     LaunchedEffect(mapImage) {
         mapImage?.let {
-            mapper.setCanvasSize(it.width.toFloat(), it.height.toFloat())
+            mapper.setCanvasSize(it.width.dp, it.height.dp)
         }
     }
 

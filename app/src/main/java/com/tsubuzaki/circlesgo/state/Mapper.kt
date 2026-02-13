@@ -2,6 +2,8 @@ package com.tsubuzaki.circlesgo.state
 
 import android.graphics.PointF
 import android.graphics.RectF
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.database.tables.LayoutCatalogMapping
 import com.tsubuzaki.circlesgo.database.types.LayoutType
@@ -12,11 +14,11 @@ class Mapper {
     typealias Layouts = Map<LayoutCatalogMapping, List<Int>>
 
     // Canvas info
-    private val _canvasWidth = MutableStateFlow(0f)
-    val canvasWidth: StateFlow<Float> = _canvasWidth
+    private val _canvasWidth = MutableStateFlow(0.dp)
+    val canvasWidth: StateFlow<Dp> = _canvasWidth
 
-    private val _canvasHeight = MutableStateFlow(0f)
-    val canvasHeight: StateFlow<Float> = _canvasHeight
+    private val _canvasHeight = MutableStateFlow(0.dp)
+    val canvasHeight: StateFlow<Dp> = _canvasHeight
 
     // Layout (interactive) layer
     private val _layouts = MutableStateFlow<Layouts>(emptyMap())
@@ -44,7 +46,7 @@ class Mapper {
     private val _highlightTarget = MutableStateFlow<ComiketCircle?>(null)
     val highlightTarget: StateFlow<ComiketCircle?> = _highlightTarget
 
-    fun setCanvasSize(width: Float, height: Float) {
+    fun setCanvasSize(width: Dp, height: Dp) {
         _canvasWidth.value = width
         _canvasHeight.value = height
     }

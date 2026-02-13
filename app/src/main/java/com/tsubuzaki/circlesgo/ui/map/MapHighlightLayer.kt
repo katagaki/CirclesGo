@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.state.HighlightData
 import com.tsubuzaki.circlesgo.state.Mapper
@@ -23,8 +24,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun MapHighlightLayer(
     highlightData: HighlightData?,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     mapper: Mapper
 ) {
     var isVisible by remember { mutableStateOf(true) }
@@ -51,8 +52,8 @@ fun MapHighlightLayer(
     if (highlightData != null) {
         Canvas(
             modifier = Modifier
-                .width(canvasWidth.dp)
-                .height(canvasHeight.dp)
+                .width(canvasWidth)
+                .height(canvasHeight)
         ) {
             val rect = highlightData.sourceRect
             drawRect(

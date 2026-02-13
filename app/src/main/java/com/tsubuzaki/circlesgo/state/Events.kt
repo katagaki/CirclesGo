@@ -37,6 +37,22 @@ class Events(private val context: Context) {
             prefs.edit().putBoolean(ACTIVE_EVENT_IS_LATEST_KEY, value).apply()
         }
 
+    fun setActiveEvent(number: Int) {
+        if (activeEventNumber != number) {
+            activeEventNumber = number
+            prefs.edit().putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber).apply()
+            
+            // update _activeEvent immediately if data is available
+            val eventInList = eventData?.list?.firstOrNull { it.number == activeEventNumber }
+            if (eventInList != null) {
+                _activeEvent.value = WebCatalogEvent.Response.Event(
+                    id = eventInList.id,
+                    number = activeEventNumber
+                )
+            }
+        }
+    }
+
     suspend fun prepare(authToken: OpenIDToken) {
         if (eventData != null && latestEvent != null) {
             if (activeEventNumber == -1) {

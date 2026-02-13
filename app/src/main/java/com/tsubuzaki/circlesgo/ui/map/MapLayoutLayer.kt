@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.tables.LayoutCatalogMapping
 import com.tsubuzaki.circlesgo.database.types.LayoutType
@@ -22,21 +23,22 @@ import com.tsubuzaki.circlesgo.state.PopoverData
 fun MapLayoutLayer(
     layouts: Map<LayoutCatalogMapping, List<Int>>,
     spaceSize: Int,
-    canvasWidth: Float,
-    canvasHeight: Float,
+    canvasWidth: Dp,
+    canvasHeight: Dp,
     popoverData: PopoverData?,
     mapper: Mapper
 ) {
+    val currentDensity = androidx.compose.ui.platform.LocalDensity.current.density
     Box(
         modifier = Modifier
-            .width(canvasWidth.dp)
-            .height(canvasHeight.dp)
+            .width(canvasWidth)
+            .height(canvasHeight)
     ) {
         // Draw selection highlight
         Canvas(
             modifier = Modifier
-                .width(canvasWidth.dp)
-                .height(canvasHeight.dp)
+                .width(canvasWidth)
+                .height(canvasHeight)
         ) {
             popoverData?.let { data ->
                 val rect = data.sourceRect
@@ -51,12 +53,12 @@ fun MapLayoutLayer(
         // Tap interaction layer
         Box(
             modifier = Modifier
-                .width(canvasWidth.dp)
-                .height(canvasHeight.dp)
-                .pointerInput(layouts) {
+                .width(canvasWidth)
+                .height(canvasHeight)
+                .pointerInput(layouts, currentDensity) {
                     detectTapGestures { offset ->
-                        val x = (offset.x / density).toInt()
-                        val y = (offset.y / density).toInt()
+                        val x = (offset.x / currentDensity).toInt()
+                        val y = (offset.y / currentDensity).toInt()
 
                         for ((layout, webCatalogIDs) in layouts) {
                             val xMin = layout.positionX

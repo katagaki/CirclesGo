@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,21 +44,28 @@ fun UnifiedControl(
     val selectedMap by selections.map.collectAsState()
 
     if (selectedDate != null && selectedMap != null) {
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 4.dp
         ) {
-            DatePickerButton(
-                selectedDate = selectedDate,
-                database = database,
-                onDateSelected = { selections.setDate(it) }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            HallPickerButton(
-                selectedMap = selectedMap,
-                database = database,
-                onMapSelected = { selections.setMap(it) }
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DatePickerButton(
+                    selectedDate = selectedDate,
+                    database = database,
+                    onDateSelected = { selections.setDate(it) }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                HallPickerButton(
+                    selectedMap = selectedMap,
+                    database = database,
+                    onMapSelected = { selections.setMap(it) }
+                )
+            }
         }
     }
 }
@@ -169,10 +177,10 @@ private fun accentColorForMap(map: ComiketMap?): Color {
         return when {
             map.name.startsWith("東") -> Color.Red
             map.name.startsWith("西") -> Color.Blue
-            map.name.startsWith("南") -> Color(0xFF2DB84D)
+            map.name.startsWith("南") -> Color.Green
             map.name.startsWith("会") -> Color.Gray
-            else -> Color(0xFF6200EE) // Default accent
+            else -> Color.Unspecified
         }
     }
-    return Color(0xFF6200EE)
+    return Color.Unspecified
 }

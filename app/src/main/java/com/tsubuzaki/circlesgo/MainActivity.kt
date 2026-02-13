@@ -29,6 +29,7 @@ import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.login.LoginView
 import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
+import com.tsubuzaki.circlesgo.ui.theme.CirclesGoTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -70,7 +71,7 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent)
 
         setContent {
-            MaterialTheme {
+            CirclesGoTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -94,6 +95,20 @@ class MainActivity : ComponentActivity() {
                             if (isReady && !isAuthenticating && token != null && !hasTriggeredInitialLoad) {
                                 hasTriggeredInitialLoad = true
                                 dataManager.reloadData(shouldResetSelections = true)
+                            }
+                        }
+
+                        // Watch for active event changes
+                        val activeEvent by events.activeEvent.collectAsState()
+                        var previousActiveEventNumber by rememberSaveable { mutableStateOf<Int?>(null) }
+                        
+                        LaunchedEffect(activeEvent) {
+                            val currentNumber = activeEvent?.number
+                            if (currentNumber != null) {
+                                if (previousActiveEventNumber != null && previousActiveEventNumber != currentNumber) {
+                                    dataManager.reloadData(shouldResetSelections = true)
+                                }
+                                previousActiveEventNumber = currentNumber
                             }
                         }
 
