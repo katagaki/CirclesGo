@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
+import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.PopoverData
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +52,8 @@ fun MapPopoverLayer(
     canvasHeight: Dp,
     mapper: Mapper,
     database: CatalogDatabase,
-    onCircleTapped: (Int) -> Unit
+    favorites: FavoritesState,
+    onCircleTapped: (ComiketCircle) -> Unit
 ) {
     var circles by remember { mutableStateOf<List<ComiketCircle>?>(null) }
 
@@ -110,10 +112,23 @@ fun MapPopoverLayer(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onCircleTapped(circle.id) }
+                                .clickable { onCircleTapped(circle) }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(60.dp)
+                                    .height(86.dp)
+                            ) {
+                                com.tsubuzaki.circlesgo.ui.shared.CircleCutImage(
+                                    circle = circle,
+                                    database = database,
+                                    favorites = favorites,
+                                    displayMode = com.tsubuzaki.circlesgo.state.GridDisplayMode.SMALL
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = circle.circleName,

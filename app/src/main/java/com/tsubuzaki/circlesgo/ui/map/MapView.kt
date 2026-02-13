@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
+import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.database.tables.LayoutCatalogMapping
 import com.tsubuzaki.circlesgo.state.ComiketHall
 import com.tsubuzaki.circlesgo.state.FavoritesState
@@ -37,7 +38,7 @@ fun MapView(
     useHighResolutionMaps: Boolean = true,
     showGenreOverlay: Boolean = false,
     scrollType: MapAutoScrollType = MapAutoScrollType.NONE,
-    onCircleTapped: (Int) -> Unit = {}
+    onCircleTapped: (ComiketCircle) -> Unit = {}
 ) {
     val selectedDate by selections.date.collectAsState()
     val selectedMap by selections.map.collectAsState()
@@ -188,6 +189,7 @@ fun MapView(
                             canvasHeight = canvasHeight,
                             mapper = mapper,
                             database = database,
+                            favorites = favorites,
                             onCircleTapped = onCircleTapped
                         )
                     }

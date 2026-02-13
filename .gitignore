@@ -15,5 +15,8 @@ local.properties
 *.jks
 *.keystore
 
+# Kotlin session and error files
+.kotlin
+
 # OpenID credentials - must not be committed
 app/src/main/assets/OpenID.json
