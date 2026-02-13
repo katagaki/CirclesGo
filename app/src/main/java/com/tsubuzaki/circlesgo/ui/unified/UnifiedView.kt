@@ -19,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ fun UnifiedView(
     onLogout: () -> Unit
 ) {
     val isGoingToSignOut by unifier.isGoingToSignOut.collectAsState()
+    val isSearchActive by unifier.isSearchActive.collectAsState()
 
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
@@ -57,6 +59,15 @@ fun UnifiedView(
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = bottomSheetState
     )
+
+    // Expand/collapse bottom sheet based on search state
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            bottomSheetState.expand()
+        } else {
+            bottomSheetState.partialExpand()
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
 

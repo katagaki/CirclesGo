@@ -4,4 +4,4 @@
 - [x] TokenStore uses a lot of deprecated stuff, replace that with newer APIs
 - [x] Remove the locate circle feature on CircleDetail view
 - [x] Fix the bug where tapping on the MapPopover does not correctly open the CircleDetail view in the bottom panel sheet
-- [ ] Use the official SearchBar component (together with the separate search view as a best practice) for the search bar in the Catalog view, and expand the bottom sheet to fullscreen when in the search result view
+- [x] Use the official SearchBar component (together with the separate search view as a best practice) for the search bar in the Catalog view, and expand the bottom sheet to fullscreen when in the search result view

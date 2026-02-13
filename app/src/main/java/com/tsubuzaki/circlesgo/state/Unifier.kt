@@ -26,6 +26,9 @@ class Unifier {
     private val _selectedCircle = MutableStateFlow<ComiketCircle?>(null)
     val selectedCircle: StateFlow<ComiketCircle?> = _selectedCircle
 
+    private val _isSearchActive = MutableStateFlow(false)
+    val isSearchActive: StateFlow<Boolean> = _isSearchActive
+
     fun show() {
         _isPresenting.value = true
     }
@@ -76,6 +79,10 @@ class Unifier {
 
     fun clearCircleDetail() {
         _selectedCircle.value = null
+    }
+
+    fun setIsSearchActive(value: Boolean) {
+        _isSearchActive.value = value
     }
 
     fun toggleSidebarPosition() {
