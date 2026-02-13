@@ -67,6 +67,10 @@
     <string name="downloading_image_database">Downloading image database…</string>
     <string name="loading_database">Loading database…</string>
 
+    <!-- Toolbar -->
+    <string name="show_catalog">Show catalog</string>
+    <string name="hide_catalog">Hide catalog</string>
+
     <!-- Map -->
     <string name="loading">Loading…</string>
     <string name="no_map_selected">No map selected</string>

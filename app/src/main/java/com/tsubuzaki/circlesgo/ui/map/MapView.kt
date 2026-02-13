@@ -48,7 +48,6 @@ fun MapView(
     val selectedMap by selections.map.collectAsState()
     val layouts by mapper.layouts.collectAsState()
     val popoverData by mapper.popoverData.collectAsState()
-    val highlightData by mapper.highlightData.collectAsState()
     val highlightTarget by mapper.highlightTarget.collectAsState()
     val popoverPosition by mapper.popoverPosition.collectAsState()
     val scrollToPosition by mapper.scrollToPosition.collectAsState()

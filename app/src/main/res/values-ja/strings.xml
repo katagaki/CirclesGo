@@ -61,6 +61,10 @@
     <string name="no_day">開催日なし</string>
     <string name="no_hall">棟なし</string>
 
+    <!-- Toolbar -->
+    <string name="show_catalog">カタログを表示</string>
+    <string name="hide_catalog">カタログを非表示</string>
+
     <!-- Map -->
     <string name="loading">読み込み中…</string>
     <string name="no_map_selected">表示できるマップがありません</string>

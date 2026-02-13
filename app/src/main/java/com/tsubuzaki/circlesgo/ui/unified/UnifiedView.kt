@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
@@ -13,6 +17,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -22,11 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.R
+import kotlinx.coroutines.launch
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
@@ -53,10 +61,11 @@ fun UnifiedView(
 ) {
     val isGoingToSignOut by unifier.isGoingToSignOut.collectAsState()
     val isSearchActive by unifier.isSearchActive.collectAsState()
+    val scope = rememberCoroutineScope()
 
     val bottomSheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.PartiallyExpanded,
-        skipHiddenState = true
+        skipHiddenState = false
     )
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = bottomSheetState
@@ -144,19 +153,39 @@ fun UnifiedView(
                     .padding(16.dp),
                 colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
                 expanded = true,
-                leadingContent = {
+                floatingActionButton = {
+                    FloatingToolbarDefaults.VibrantFloatingActionButton(
+                        onClick = {scope.launch {
+                            if (scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden) {
+                                bottomSheetState.partialExpand()
+                            } else {
+                                bottomSheetState.hide()
+                            } }}
+                    ) {
+                        if (scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowUp,
+                                contentDescription = stringResource(R.string.show_catalog)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = stringResource(R.string.hide_catalog)
+                            )
+                        }
+                    }
+                },
+                content = {
                     UnifiedControl(
                         database = database,
                         selections = selections
                     )
-                },
-                trailingContent = {
                     UnifiedMoreMenu(
                         unifier = unifier,
                         events = events
                     )
                 }
-            ) { }
+            )
         }
 
         // Progress overlay (shown during database download/loading)
