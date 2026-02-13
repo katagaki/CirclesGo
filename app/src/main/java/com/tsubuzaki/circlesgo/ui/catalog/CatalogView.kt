@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
@@ -116,124 +117,123 @@ fun CatalogView(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Search bar
-        SearchBar(
-            inputField = {
-                SearchBarDefaults.InputField(
-                    query = searchTerm,
-                    onQueryChange = { searchTerm = it },
-                    onSearch = { searchExpanded = false },
-                    expanded = searchExpanded,
-                    onExpandedChange = { searchExpanded = it },
-                    placeholder = { Text("Search circles...") },
-                    leadingIcon = {
-                        if (searchExpanded) {
-                            IconButton(onClick = {
-                                searchExpanded = false
-                                searchTerm = ""
-                            }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Close search"
-                                )
-                            }
-                        } else {
-                            Icon(Icons.Filled.Search, contentDescription = null)
+    // Search bar
+    SearchBar(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (!searchExpanded) Modifier.padding(horizontal = 16.dp)
+                else Modifier
+            )
+            .semantics { traversalIndex = -1f },
+        inputField = {
+            SearchBarDefaults.InputField(
+                query = searchTerm,
+                onQueryChange = { searchTerm = it },
+                onSearch = { searchExpanded = false },
+                expanded = searchExpanded,
+                onExpandedChange = { searchExpanded = it },
+                placeholder = { Text("Search circles...") },
+                leadingIcon = {
+                    if (searchExpanded) {
+                        IconButton(onClick = {
+                            searchExpanded = false
+                            searchTerm = ""
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Close search"
+                            )
                         }
-                    },
-                    trailingIcon = {
-                        if (searchTerm.isNotEmpty()) {
-                            IconButton(onClick = { searchTerm = "" }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Clear")
-                            }
+                    } else {
+                        Icon(Icons.Filled.Search, contentDescription = null)
+                    }
+                },
+                trailingIcon = {
+                    if (searchTerm.isNotEmpty()) {
+                        IconButton(onClick = { searchTerm = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear")
                         }
                     }
+                }
+            )
+        },
+        expanded = searchExpanded,
+        onExpandedChange = { searchExpanded = it },
+        windowInsets = WindowInsets(0, 0, 0, 0),
+    ) {
+        // Search results view (shown when expanded)
+        val currentSearched = searchedCircles
+        if (currentSearched != null) {
+            CircleGrid(
+                circles = currentSearched,
+                displayMode = GridDisplayMode.MEDIUM,
+                database = database,
+                favorites = favorites,
+                onSelect = { circle ->
+                    searchExpanded = false
+                    unifier.showCircleDetail(circle)
+                },
+                onLoadMore = onLoadMore,
+                isLoadingMore = isCurrentlyLoadingMore
+            )
+        } else if (searchTerm.isNotEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Type at least 2 characters to search.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            },
-            expanded = searchExpanded,
-            onExpandedChange = { searchExpanded = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (!searchExpanded) Modifier.padding(horizontal = 16.dp)
-                    else Modifier
-                )
-                .semantics { traversalIndex = -1f },
-        ) {
-            // Search results view (shown when expanded)
-            val currentSearched = searchedCircles
-            if (currentSearched != null) {
-                CircleGrid(
-                    circles = currentSearched,
-                    displayMode = GridDisplayMode.MEDIUM,
-                    database = database,
-                    favorites = favorites,
-                    onSelect = { circle ->
-                        searchExpanded = false
-                        unifier.showCircleDetail(circle)
-                    },
-                    onLoadMore = onLoadMore,
-                    isLoadingMore = isCurrentlyLoadingMore
-                )
-            } else if (searchTerm.isNotEmpty()) {
+            }
+        }
+    }
+
+    // Main content (shown when search is not expanded)
+    if (!searchExpanded) {
+        CatalogToolbar(
+            database = database,
+            selections = selections
+        )
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Type at least 2 characters to search.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
-            }
-        }
+            } else {
+                val hasNoFilter =
+                    selectedGenres.isEmpty() && selectedMap == null
 
-        // Main content (shown when search is not expanded)
-        if (!searchExpanded) {
-            CatalogToolbar(
-                database = database,
-                selections = selections
-            )
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (isLoading) {
+                if (hasNoFilter) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                    }
-                } else {
-                    val hasNoFilter =
-                        selectedGenres.isEmpty() && selectedMap == null
-
-                    if (hasNoFilter) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Select a hall and filters\nto browse circles.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-                    } else {
-                        CircleGrid(
-                            circles = displayedCircles,
-                            displayMode = GridDisplayMode.MEDIUM,
-                            database = database,
-                            favorites = favorites,
-                            onSelect = { circle ->
-                                unifier.showCircleDetail(circle)
-                            },
-                            onLoadMore = onLoadMore,
-                            isLoadingMore = isCurrentlyLoadingMore
+                        Text(
+                            text = "Select a hall and filters\nto browse circles.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp)
                         )
                     }
+                } else {
+                    CircleGrid(
+                        circles = displayedCircles,
+                        displayMode = GridDisplayMode.MEDIUM,
+                        database = database,
+                        favorites = favorites,
+                        onSelect = { circle ->
+                            unifier.showCircleDetail(circle)
+                        },
+                        onLoadMore = onLoadMore,
+                        isLoadingMore = isCurrentlyLoadingMore
+                    )
                 }
             }
         }
