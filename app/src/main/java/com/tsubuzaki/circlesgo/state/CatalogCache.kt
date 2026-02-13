@@ -44,6 +44,7 @@ class CatalogCache {
         if (currentCount >= allFilterResultIDs.size) return
 
         val nextIDs = allFilterResultIDs.drop(currentCount).take(pageSize)
+        database.prefetchCircleImages(nextIDs)
         val nextCircles = database.circles(nextIDs)
         if (nextCircles.isNotEmpty()) {
             _displayedCircles.value = _displayedCircles.value + nextCircles
@@ -57,6 +58,7 @@ class CatalogCache {
         if (currentCount >= searchIDs.size) return
 
         val nextIDs = searchIDs.drop(currentCount).take(pageSize)
+        database.prefetchCircleImages(nextIDs)
         val nextCircles = database.circles(nextIDs)
         if (nextCircles.isNotEmpty()) {
             _searchedCircles.value = currentCircles + nextCircles

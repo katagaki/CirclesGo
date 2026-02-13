@@ -74,6 +74,7 @@ fun CatalogView(
                 val circleIDs = CatalogCache.searchCircles(searchTerm, database)
                 if (circleIDs != null) {
                     val firstPageIDs = circleIDs.take(50)
+                    database.prefetchCircleImages(firstPageIDs)
                     val circles = database.circles(firstPageIDs)
                     catalogCache.setSearchedCircles(circles, circleIDs)
                 } else {
@@ -202,6 +203,7 @@ private suspend fun reloadDisplayedCircles(
     )
 
     val firstPageIDs = circleIDs.take(50)
+    database.prefetchCircleImages(firstPageIDs)
     val circles = database.circles(firstPageIDs)
     catalogCache.setDisplayedCircles(circles, circleIDs)
     catalogCache.setIsLoading(false)

@@ -40,12 +40,17 @@ fun CircleCutImage(
     showSpaceName: Boolean = false,
     showDay: Boolean = false
 ) {
-    val imageBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
-        initialValue = null,
+    val cachedBitmap = remember(circle.id) {
+        database.cachedCircleImage(circle.id)?.asImageBitmap()
+    }
+    val imageBitmap by produceState(
+        initialValue = cachedBitmap,
         key1 = circle.id
     ) {
-        value = withContext(Dispatchers.IO) {
-            database.circleImage(circle.id)?.asImageBitmap()
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                database.circleImage(circle.id)?.asImageBitmap()
+            }
         }
     }
     val wcIDMappedItems by favorites.wcIDMappedItems.collectAsState()

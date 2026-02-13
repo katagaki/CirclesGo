@@ -377,6 +377,10 @@ class CatalogDatabase(private val context: Context) {
         return commonImage("$prefix$day$hall")
     }
 
+    fun cachedCircleImage(id: Int): Bitmap? {
+        return imageCache.get(id.toString())
+    }
+
     fun circleImage(id: Int): Bitmap? {
         val cacheKey = id.toString()
         imageCache.get(cacheKey)?.let { return it }
@@ -404,6 +408,37 @@ class CatalogDatabase(private val context: Context) {
             Log.e(TAG, "Failed to load circle image $id", e)
         }
         return null
+    }
+
+    fun prefetchCircleImages(ids: List<Int>) {
+        if (ids.isEmpty()) return
+        val uncachedIDs = ids.filter { imageCache.get(it.toString()) == null }
+        if (uncachedIDs.isEmpty()) return
+
+        val db = getImageDatabase() ?: return
+        try {
+            val placeholders = uncachedIDs.joinToString(",") { "?" }
+            val args = uncachedIDs.map { it.toString() }.toTypedArray()
+            val cursor = db.rawQuery(
+                "SELECT id, cutImage FROM ComiketCircleImage WHERE id IN ($placeholders)",
+                args
+            )
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            cursor.use {
+                while (it.moveToNext()) {
+                    val id = it.getInt(0)
+                    val data = it.getBlob(1)
+                    val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
+                    if (bitmap != null) {
+                        imageCache.put(id.toString(), bitmap)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to prefetch circle images", e)
+        }
     }
 
     fun commonImage(imageName: String): Bitmap? {
