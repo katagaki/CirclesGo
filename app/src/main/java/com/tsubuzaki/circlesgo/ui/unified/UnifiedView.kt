@@ -1,13 +1,13 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
@@ -18,7 +18,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.R
-import kotlinx.coroutines.launch
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
@@ -45,6 +43,7 @@ import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.map.MapView
 import com.tsubuzaki.circlesgo.ui.shared.ProgressOverlay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -124,13 +123,15 @@ fun UnifiedView(
                 )
             },
             sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-            sheetShadowElevation = 16.dp
+            sheetShadowElevation = 16.dp,
+            sheetSwipeEnabled = scaffoldState.bottomSheetState.currentValue != SheetValue.Hidden
         ) { innerPadding ->
             // Main map view content
+            val isSheetHidden = scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .padding(if (isSheetHidden) PaddingValues(bottom = (FloatingToolbarDefaults.ScreenOffset + (96).dp)) else innerPadding)
             ) {
                 MapView(
                     database = database,
@@ -155,12 +156,15 @@ fun UnifiedView(
                 expanded = true,
                 floatingActionButton = {
                     FloatingToolbarDefaults.VibrantFloatingActionButton(
-                        onClick = {scope.launch {
-                            if (scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden) {
-                                bottomSheetState.partialExpand()
-                            } else {
-                                bottomSheetState.hide()
-                            } }}
+                        onClick = {
+                            scope.launch {
+                                if (scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden) {
+                                    bottomSheetState.partialExpand()
+                                } else {
+                                    bottomSheetState.hide()
+                                }
+                            }
+                        }
                     ) {
                         if (scaffoldState.bottomSheetState.targetValue == SheetValue.Hidden) {
                             Icon(

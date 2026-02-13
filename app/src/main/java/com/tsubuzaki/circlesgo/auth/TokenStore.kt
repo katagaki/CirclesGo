@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import com.tsubuzaki.circlesgo.api.auth.OpenIDToken
 import kotlinx.serialization.json.Json
 import java.security.KeyStore
@@ -12,7 +13,6 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import androidx.core.content.edit
 
 class TokenStore(context: Context) {
 

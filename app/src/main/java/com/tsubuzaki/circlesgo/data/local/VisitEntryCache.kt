@@ -1,9 +1,9 @@
 package com.tsubuzaki.circlesgo.data.local
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import androidx.core.content.edit
 
 class VisitEntryCache(context: Context) {
 

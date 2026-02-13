@@ -1,9 +1,9 @@
 package com.tsubuzaki.circlesgo.data.local
 
 import android.content.Context
+import androidx.core.content.edit
 import com.tsubuzaki.circlesgo.api.catalog.UserFavorites
 import kotlinx.serialization.json.Json
-import androidx.core.content.edit
 
 class FavoritesCache(context: Context) {
 
@@ -17,7 +17,7 @@ class FavoritesCache(context: Context) {
 
     fun save(items: List<UserFavorites.Response.FavoriteItem>) {
         val encoded = json.encodeToString(items)
-        prefs.edit {putString(FAVORITES_KEY, encoded)}
+        prefs.edit { putString(FAVORITES_KEY, encoded) }
     }
 
     fun load(): List<UserFavorites.Response.FavoriteItem> {

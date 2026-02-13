@@ -1,6 +1,7 @@
 package com.tsubuzaki.circlesgo.state
 
 import android.content.Context
+import androidx.core.content.edit
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketBlock
 import com.tsubuzaki.circlesgo.database.tables.ComiketDate
@@ -8,7 +9,6 @@ import com.tsubuzaki.circlesgo.database.tables.ComiketGenre
 import com.tsubuzaki.circlesgo.database.tables.ComiketMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import androidx.core.content.edit
 
 class UserSelections(context: Context) {
 
@@ -41,7 +41,7 @@ class UserSelections(context: Context) {
             _genres.value = emptySet()
             prefs.edit().putStringSet(SELECTED_GENRES_KEY, emptySet()).apply()
             _blocks.value = emptySet()
-            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet())}
+            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet()) }
         }
     }
 
@@ -52,7 +52,7 @@ class UserSelections(context: Context) {
             _genres.value = emptySet()
             prefs.edit { putStringSet(SELECTED_GENRES_KEY, emptySet()) }
             _blocks.value = emptySet()
-            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet())}
+            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet()) }
         }
     }
 
@@ -60,14 +60,14 @@ class UserSelections(context: Context) {
         _blocks.value = blocks
         prefs.edit {
             putStringSet(SELECTED_BLOCKS_KEY, blocks.map { it.id.toString() }.toSet())
-            }
+        }
     }
 
     fun setGenres(genres: Set<ComiketGenre>) {
         _genres.value = genres
         prefs.edit {
             putStringSet(SELECTED_GENRES_KEY, genres.map { it.id.toString() }.toSet())
-            }
+        }
     }
 
     fun reloadData(database: CatalogDatabase) {

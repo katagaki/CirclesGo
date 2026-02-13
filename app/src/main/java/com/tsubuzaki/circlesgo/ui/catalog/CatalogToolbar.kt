@@ -142,7 +142,11 @@ private fun GenreFilterMenu(
             Text(
                 text = when {
                     selectedGenres.size == 1 -> selectedGenres.first().name
-                    selectedGenres.size > 1 -> stringResource(R.string.genres_count_format, selectedGenres.size)
+                    selectedGenres.size > 1 -> stringResource(
+                        R.string.genres_count_format,
+                        selectedGenres.size
+                    )
+
                     else -> stringResource(R.string.genre_filter)
                 },
                 fontSize = 13.sp
@@ -193,7 +197,11 @@ private fun BlockFilterMenu(
             Text(
                 text = when {
                     selectedBlocks.size == 1 -> selectedBlocks.first().name
-                    selectedBlocks.size > 1 -> stringResource(R.string.blocks_count_format, selectedBlocks.size)
+                    selectedBlocks.size > 1 -> stringResource(
+                        R.string.blocks_count_format,
+                        selectedBlocks.size
+                    )
+
                     else -> stringResource(R.string.block_filter)
                 },
                 fontSize = 13.sp

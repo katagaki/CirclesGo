@@ -2,15 +2,15 @@ package com.tsubuzaki.circlesgo.state
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.api.auth.OpenIDToken
 import com.tsubuzaki.circlesgo.api.catalog.FavoritesAPI
 import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.CatalogDatabaseDownloader
-import com.tsubuzaki.circlesgo.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import androidx.core.content.edit
 
 class DataManager(
     private val context: Context,

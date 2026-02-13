@@ -2,6 +2,7 @@ package com.tsubuzaki.circlesgo.api.catalog
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.tsubuzaki.circlesgo.api.Endpoints
 import com.tsubuzaki.circlesgo.api.auth.OpenIDToken
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +11,6 @@ import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import androidx.core.content.edit
 
 object WebCatalogAPI {
 
