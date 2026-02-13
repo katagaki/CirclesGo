@@ -72,7 +72,7 @@ fun UnifiedMoreMenu(
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 8.dp
+        shadowElevation = 4.dp
     ) {
         IconButton(
             onClick = { expanded = true },

@@ -1,5 +1,6 @@
 package com.tsubuzaki.circlesgo.ui.catalog
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -129,42 +130,44 @@ private fun GenreFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    TextButton(onClick = { expanded = true }) {
-        Icon(
-            imageVector = Icons.Filled.Theaters,
-            contentDescription = null,
-            modifier = Modifier.padding(end = 4.dp)
-        )
-        Text(
-            text = when {
-                selectedGenres.size == 1 -> selectedGenres.first().name
-                selectedGenres.size > 1 -> "Genres (${selectedGenres.size})"
-                else -> "Genre"
-            },
-            fontSize = 13.sp
-        )
-    }
-
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        DropdownMenuItem(
-            text = { Text("All") },
-            onClick = {
-                onClearAll()
-            }
-        )
-        for (genre in genres) {
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(genre.name)
-                        if (selectedGenres.contains(genre)) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("✓", fontSize = 12.sp)
-                        }
-                    }
-                },
-                onClick = { onGenreToggled(genre) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Filled.Theaters,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 4.dp)
             )
+            Text(
+                text = when {
+                    selectedGenres.size == 1 -> selectedGenres.first().name
+                    selectedGenres.size > 1 -> "Genres (${selectedGenres.size})"
+                    else -> "Genre"
+                },
+                fontSize = 13.sp
+            )
+        }
+
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("All") },
+                onClick = {
+                    onClearAll()
+                }
+            )
+            for (genre in genres) {
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(genre.name)
+                            if (selectedGenres.contains(genre)) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("✓", fontSize = 12.sp)
+                            }
+                        }
+                    },
+                    onClick = { onGenreToggled(genre) }
+                )
+            }
         }
     }
 }
@@ -178,42 +181,44 @@ private fun BlockFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    TextButton(onClick = { expanded = true }) {
-        Icon(
-            imageVector = Icons.Filled.Checklist,
-            contentDescription = null,
-            modifier = Modifier.padding(end = 4.dp)
-        )
-        Text(
-            text = when {
-                selectedBlocks.size == 1 -> selectedBlocks.first().name
-                selectedBlocks.size > 1 -> "Blocks (${selectedBlocks.size})"
-                else -> "Block"
-            },
-            fontSize = 13.sp
-        )
-    }
-
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        DropdownMenuItem(
-            text = { Text("All") },
-            onClick = {
-                onClearAll()
-            }
-        )
-        for (block in blocks) {
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(block.name)
-                        if (selectedBlocks.contains(block)) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("✓", fontSize = 12.sp)
-                        }
-                    }
-                },
-                onClick = { onBlockToggled(block) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Filled.Checklist,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 4.dp)
             )
+            Text(
+                text = when {
+                    selectedBlocks.size == 1 -> selectedBlocks.first().name
+                    selectedBlocks.size > 1 -> "Blocks (${selectedBlocks.size})"
+                    else -> "Block"
+                },
+                fontSize = 13.sp
+            )
+        }
+
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("All") },
+                onClick = {
+                    onClearAll()
+                }
+            )
+            for (block in blocks) {
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(block.name)
+                            if (selectedBlocks.contains(block)) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("✓", fontSize = 12.sp)
+                            }
+                        }
+                    },
+                    onClick = { onBlockToggled(block) }
+                )
+            }
         }
     }
 }

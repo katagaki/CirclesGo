@@ -36,7 +36,8 @@ fun ColorGroupedCircleList(
                 val circles = groups[color.value.toString()] ?: continue
                 items(
                     items = circles,
-                    key = { circle -> circle.id }
+                    key = { circle -> circle.id },
+                    contentType = { "circle" }
                 ) { circle ->
                     val bgColor = color.backgroundColor().copy(alpha = 0.15f)
                     when (displayMode) {

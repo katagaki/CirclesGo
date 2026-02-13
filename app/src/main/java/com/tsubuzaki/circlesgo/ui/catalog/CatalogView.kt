@@ -1,17 +1,12 @@
 package com.tsubuzaki.circlesgo.ui.catalog
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -28,17 +23,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
-import com.tsubuzaki.circlesgo.state.CircleDisplayMode
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.GridDisplayMode
-import com.tsubuzaki.circlesgo.state.ListDisplayMode
 import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
@@ -60,21 +52,16 @@ fun CatalogView(
     val searchedCircles by catalogCache.searchedCircles.collectAsState()
 
     val selectedGenres by selections.genres.collectAsState()
+    val selectedBlocks by selections.blocks.collectAsState()
     val selectedMap by selections.map.collectAsState()
     val selectedDate by selections.date.collectAsState()
 
-    // Display mode preferences (saved across recompositions)
-    var displayMode by rememberSaveable { mutableStateOf(CircleDisplayMode.GRID) }
-    var gridDisplayMode by rememberSaveable { mutableStateOf(GridDisplayMode.MEDIUM) }
-    var listDisplayMode by rememberSaveable { mutableStateOf(ListDisplayMode.REGULAR) }
-
     // Search state
-    var isSearchActive by remember { mutableStateOf(false) }
     var searchTerm by remember { mutableStateOf("") }
 
     // Reload circles when selection changes
-    val catalogSelectionID = selections.catalogSelectionID
-    LaunchedEffect(catalogSelectionID) {
+    LaunchedEffect(selectedMap, selectedDate, selectedGenres, selectedBlocks) {
+        val catalogSelectionID = selections.catalogSelectionID
         if (catalogCache.invalidationID != catalogSelectionID) {
             reloadDisplayedCircles(catalogCache, selections, database)
         }
@@ -118,70 +105,28 @@ fun CatalogView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Display mode switcher row + search toggle
-        Row(
+        // Search bar
+        OutlinedTextField(
+            value = searchTerm,
+            onValueChange = { searchTerm = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DisplayModeSwitcher(
-                mode = displayMode,
-                onModeChanged = { displayMode = it }
-            )
-            when (displayMode) {
-                CircleDisplayMode.GRID -> {
-                    GridModeSwitcher(
-                        mode = gridDisplayMode,
-                        onModeChanged = { gridDisplayMode = it }
-                    )
-                }
-
-                CircleDisplayMode.LIST -> {
-                    ListModeSwitcher(
-                        mode = listDisplayMode,
-                        onModeChanged = { listDisplayMode = it }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = {
-                isSearchActive = !isSearchActive
-                if (!isSearchActive) {
-                    searchTerm = ""
-                }
-            }) {
-                Icon(
-                    imageVector = if (isSearchActive) Icons.Filled.Close else Icons.Filled.Search,
-                    contentDescription = if (isSearchActive) "Close search" else "Search"
-                )
-            }
-        }
-
-        // Search bar
-        if (isSearchActive) {
-            OutlinedTextField(
-                value = searchTerm,
-                onValueChange = { searchTerm = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                placeholder = { Text("Search circles...") },
-                singleLine = true,
-                leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                },
-                trailingIcon = {
-                    if (searchTerm.isNotEmpty()) {
-                        IconButton(onClick = { searchTerm = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear")
-                        }
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            placeholder = { Text("Search circles...") },
+            singleLine = true,
+            shape = RoundedCornerShape(50),
+            leadingIcon = {
+                Icon(Icons.Filled.Search, contentDescription = null)
+            },
+            trailingIcon = {
+                if (searchTerm.isNotEmpty()) {
+                    IconButton(onClick = { searchTerm = "" }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Clear")
                     }
                 }
-            )
-        }
+            },
+        )
 
-        // Genre and block filter toolbar
         CatalogToolbar(
             database = database,
             selections = selections
@@ -214,41 +159,17 @@ fun CatalogView(
                         )
                     }
                 } else {
-                    AnimatedContent(
-                        targetState = displayMode,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "displayMode"
-                    ) { mode ->
-                        when (mode) {
-                            CircleDisplayMode.GRID -> {
-                                CircleGrid(
-                                    circles = circlesToShow,
-                                    displayMode = gridDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    },
-                                    onLoadMore = onLoadMore,
-                                    isLoadingMore = isCurrentlyLoadingMore
-                                )
-                            }
-
-                            CircleDisplayMode.LIST -> {
-                                CircleList(
-                                    circles = circlesToShow,
-                                    displayMode = listDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    },
-                                    onLoadMore = onLoadMore,
-                                    isLoadingMore = isCurrentlyLoadingMore
-                                )
-                            }
-                        }
-                    }
+                    CircleGrid(
+                        circles = circlesToShow,
+                        displayMode = GridDisplayMode.MEDIUM,
+                        database = database,
+                        favorites = favorites,
+                        onSelect = { circle ->
+                            unifier.showCircleDetail(circle)
+                        },
+                        onLoadMore = onLoadMore,
+                        isLoadingMore = isCurrentlyLoadingMore
+                    )
                 }
             }
         }

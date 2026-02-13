@@ -1,9 +1,5 @@
 package com.tsubuzaki.circlesgo.ui.favorites
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,29 +19,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
-import com.tsubuzaki.circlesgo.state.CircleDisplayMode
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.GridDisplayMode
-import com.tsubuzaki.circlesgo.state.ListDisplayMode
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.catalog.CircleGrid
-import com.tsubuzaki.circlesgo.ui.catalog.CircleList
 import com.tsubuzaki.circlesgo.ui.catalog.ColorGroupedCircleGrid
-import com.tsubuzaki.circlesgo.ui.catalog.ColorGroupedCircleList
-import com.tsubuzaki.circlesgo.ui.catalog.DisplayModeSwitcher
-import com.tsubuzaki.circlesgo.ui.catalog.GridModeSwitcher
-import com.tsubuzaki.circlesgo.ui.catalog.ListModeSwitcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -62,10 +48,6 @@ fun FavoritesView(
     val isGroupedByColor by favorites.isGroupedByColor.collectAsState()
     val selectedDate by selections.date.collectAsState()
 
-    var displayMode by rememberSaveable { mutableStateOf(CircleDisplayMode.GRID) }
-    var gridDisplayMode by rememberSaveable { mutableStateOf(GridDisplayMode.MEDIUM) }
-    var listDisplayMode by rememberSaveable { mutableStateOf(ListDisplayMode.REGULAR) }
-
     // Prepare circles when favorite items or selected date changes
     LaunchedEffect(favoriteItems, selectedDate) {
         val items = favoriteItems ?: return@LaunchedEffect
@@ -75,32 +57,13 @@ fun FavoritesView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Toolbar row: display mode switchers + group by color toggle
+        // Toolbar row: group by color toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DisplayModeSwitcher(
-                mode = displayMode,
-                onModeChanged = { displayMode = it }
-            )
-            when (displayMode) {
-                CircleDisplayMode.GRID -> {
-                    GridModeSwitcher(
-                        mode = gridDisplayMode,
-                        onModeChanged = { gridDisplayMode = it }
-                    )
-                }
-
-                CircleDisplayMode.LIST -> {
-                    ListModeSwitcher(
-                        mode = listDisplayMode,
-                        onModeChanged = { listDisplayMode = it }
-                    )
-                }
-            }
             Spacer(modifier = Modifier.weight(1f))
             TextButton(onClick = { favorites.toggleGroupByColor() }) {
                 Icon(
@@ -150,71 +113,31 @@ fun FavoritesView(
                     )
                 }
             } else {
-                AnimatedContent(
-                    targetState = Triple(displayMode, isGroupedByColor, circles),
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "favoritesContent"
-                ) { (mode, grouped, circleGroups) ->
-                    if (grouped) {
-                        when (mode) {
-                            CircleDisplayMode.GRID -> {
-                                ColorGroupedCircleGrid(
-                                    groups = circleGroups,
-                                    displayMode = gridDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    showsOverlayWhenEmpty = false,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    }
-                                )
-                            }
-
-                            CircleDisplayMode.LIST -> {
-                                ColorGroupedCircleList(
-                                    groups = circleGroups,
-                                    displayMode = listDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    showsOverlayWhenEmpty = false,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    }
-                                )
-                            }
+                if (isGroupedByColor) {
+                    ColorGroupedCircleGrid(
+                        groups = circles,
+                        displayMode = GridDisplayMode.MEDIUM,
+                        database = database,
+                        favorites = favorites,
+                        showsOverlayWhenEmpty = false,
+                        onSelect = { circle ->
+                            unifier.showCircleDetail(circle)
                         }
-                    } else {
-                        val flatCircles = circleGroups.values
-                            .flatten()
-                            .sortedBy { it.id }
-                        when (mode) {
-                            CircleDisplayMode.GRID -> {
-                                CircleGrid(
-                                    circles = flatCircles,
-                                    displayMode = gridDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    showsOverlayWhenEmpty = false,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    }
-                                )
-                            }
-
-                            CircleDisplayMode.LIST -> {
-                                CircleList(
-                                    circles = flatCircles,
-                                    displayMode = listDisplayMode,
-                                    database = database,
-                                    favorites = favorites,
-                                    showsOverlayWhenEmpty = false,
-                                    onSelect = { circle ->
-                                        unifier.showCircleDetail(circle)
-                                    }
-                                )
-                            }
+                    )
+                } else {
+                    val flatCircles = circles.values
+                        .flatten()
+                        .sortedBy { it.id }
+                    CircleGrid(
+                        circles = flatCircles,
+                        displayMode = GridDisplayMode.MEDIUM,
+                        database = database,
+                        favorites = favorites,
+                        showsOverlayWhenEmpty = false,
+                        onSelect = { circle ->
+                            unifier.showCircleDetail(circle)
                         }
-                    }
+                    )
                 }
             }
         }

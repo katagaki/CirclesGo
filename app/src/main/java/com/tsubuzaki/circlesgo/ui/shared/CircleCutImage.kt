@@ -1,6 +1,5 @@
 package com.tsubuzaki.circlesgo.ui.shared
 
-import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,11 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +28,8 @@ import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.GridDisplayMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CircleCutImage(
@@ -37,11 +40,13 @@ fun CircleCutImage(
     showSpaceName: Boolean = false,
     showDay: Boolean = false
 ) {
-    val cutImage: Bitmap? = remember(circle.id) {
-        database.circleImage(circle.id)
-    }
-    val imageBitmap = remember(cutImage) {
-        cutImage?.asImageBitmap()
+    val imageBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        initialValue = null,
+        key1 = circle.id
+    ) {
+        value = withContext(Dispatchers.IO) {
+            database.circleImage(circle.id)?.asImageBitmap()
+        }
     }
     val wcIDMappedItems by favorites.wcIDMappedItems.collectAsState()
 
@@ -49,9 +54,10 @@ fun CircleCutImage(
         modifier = Modifier.aspectRatio(180f / 256f),
         contentAlignment = Alignment.Center
     ) {
-        if (imageBitmap != null) {
+        val currentBitmap = imageBitmap
+        if (currentBitmap != null) {
             Image(
-                bitmap = imageBitmap,
+                bitmap = currentBitmap,
                 contentDescription = circle.circleName,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
@@ -64,16 +70,12 @@ fun CircleCutImage(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "No Image",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
             }
         }
 
         // Favorite color indicator overlay
-        if (imageBitmap != null) {
+        if (currentBitmap != null) {
             val favoriteItem: UserFavorites.Response.FavoriteItem? = remember(
                 circle.extendedInformation?.webCatalogID, wcIDMappedItems
             ) {

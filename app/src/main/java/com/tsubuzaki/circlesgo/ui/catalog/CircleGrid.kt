@@ -62,7 +62,8 @@ fun CircleGrid(
         ) {
             itemsIndexed(
                 items = circles,
-                key = { _, circle -> circle.id }
+                key = { _, circle -> circle.id },
+                contentType = { _, _ -> "circle" }
             ) { _, circle ->
                 Box(
                     modifier = Modifier

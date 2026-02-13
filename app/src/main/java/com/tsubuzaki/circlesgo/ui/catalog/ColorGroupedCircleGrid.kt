@@ -48,7 +48,8 @@ fun ColorGroupedCircleGrid(
                 // Color section items
                 items(
                     items = circles,
-                    key = { circle -> circle.id }
+                    key = { circle -> circle.id },
+                    contentType = { "circle" }
                 ) { circle ->
                     Box(
                         modifier = Modifier

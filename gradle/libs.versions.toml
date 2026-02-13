@@ -1,15 +1,17 @@
 [versions]
+activity-compose = "1.13.0-alpha01"
+activity-ktx = "1.12.4"
 agp = "9.0.0"
-coroutines = "1.10.2"
-serialization = "1.10.0"
-ktor = "3.4.0"
-security = "1.1.0"
 browser = "1.9.0"
+compose-bom = "2026.02.00"
 core-ktx = "1.17.0"
-lifecycle = "2.10.0"
-activity-compose = "1.12.3"
-compose-bom = "2026.01.01"
+coroutines = "1.10.2"
 kotlin = "2.3.10"
+ktor = "3.4.0"
+lifecycle = "2.10.0"
+material3 = "1.5.0-alpha14"
+security = "1.1.0"
+serialization = "1.10.0"
 
 [libraries]
 # Kotlin & Coroutines
@@ -35,13 +37,18 @@ lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx
 
 # Compose
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity-ktx" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
-compose-ui = { module = "androidx.compose.ui:ui" }
-compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-material3-adaptive = { group = "androidx.compose.material3.adaptive", name = "adaptive" }
+compose-material3-adaptive-layout = { group = "androidx.compose.material3.adaptive", name = "adaptive-layout" }
+compose-material3-adaptive-navigation = { group = "androidx.compose.material3.adaptive", name = "adaptive-navigation" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-org-jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "2.3.10" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+org-jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version = "2.3.10" }

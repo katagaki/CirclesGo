@@ -2,6 +2,7 @@ package com.tsubuzaki.circlesgo.ui.map
 
 import android.graphics.Bitmap
 import android.graphics.RectF
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
@@ -15,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
@@ -150,7 +152,9 @@ fun MapView(
     val currentMapImage = mapImage
     if (currentMapImage != null) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .background(Color.Red)
+                .fillMaxSize(),
         ) {
             MapGestureLayer(
                 layouts = layouts,

@@ -1,5 +1,6 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -30,6 +31,7 @@ import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.map.MapView
 import com.tsubuzaki.circlesgo.ui.shared.ProgressOverlay
 
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnifiedView(
@@ -79,7 +81,7 @@ fun UnifiedView(
 
         BottomSheetScaffold(
             scaffoldState = scaffoldState,
-            sheetPeekHeight = 360.dp,
+            sheetPeekHeight = 400.dp,
             sheetDragHandle = {
                 val isExpanded = scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded
                 BottomSheetDefaults.DragHandle(
@@ -97,7 +99,6 @@ fun UnifiedView(
             sheetContent = {
                 UnifiedPanel(
                     unifier = unifier,
-                    events = events,
                     database = database,
                     favorites = favorites,
                     selections = selections,

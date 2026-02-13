@@ -47,7 +47,7 @@ fun UnifiedControl(
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 8.dp
+            shadowElevation = 4.dp
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),

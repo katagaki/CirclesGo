@@ -3,7 +3,10 @@
     "allow": [
       "Bash(ls:*)",
       "WebSearch",
-      "Bash(./gradlew compileDebugKotlin:*)"
+      "Bash(./gradlew compileDebugKotlin:*)",
+      "WebFetch(domain:composables.com)",
+      "WebFetch(domain:joebirch.co)",
+      "Bash(jar tf:*)"
     ]
   }
 }
