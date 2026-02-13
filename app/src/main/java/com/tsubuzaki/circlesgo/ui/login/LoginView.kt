@@ -1,7 +1,7 @@
 package com.tsubuzaki.circlesgo.ui.login
 
-import android.content.Intent
-import android.net.Uri
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,10 +28,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 
 @Composable
 fun LoginView(
@@ -39,6 +41,7 @@ fun LoginView(
     onLoginTapped: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
 
     Column(
         modifier = Modifier
@@ -90,9 +93,16 @@ fun LoginView(
         Button(
             onClick = {
                 onLoginTapped()
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authURL))
-                context.startActivity(intent)
+                val colorSchemeParams = CustomTabColorSchemeParams.Builder()
+                    .setToolbarColor(primaryColor)
+                    .build()
+
+                val customTabsIntent = CustomTabsIntent.Builder()
+                    .setDefaultColorSchemeParams(colorSchemeParams)
+                    .build()
+                customTabsIntent.launchUrl(context, authURL.toUri())
             },
+
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),

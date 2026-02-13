@@ -96,7 +96,7 @@ fun MapGestureLayer(
                 detectTapGestures { tapOffset ->
                     val mapX = (tapOffset.x - offset.x) / currentZoom
                     val mapY = (tapOffset.y - offset.y) / currentZoom
-                    
+
                     val mapXDp = mapX / density.density
                     val mapYDp = mapY / density.density
 

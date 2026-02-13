@@ -1,7 +1,7 @@
 package com.tsubuzaki.circlesgo.ui.circledetail
 
-import android.content.Intent
-import android.net.Uri
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,10 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
@@ -63,6 +65,7 @@ fun CircleDetailView(
     unifier: Unifier
 ) {
     val context = LocalContext.current
+    val primaryColor = MaterialTheme.colorScheme.primary.toArgb()
     val scope = rememberCoroutineScope()
     var genre by remember { mutableStateOf<String?>(null) }
 
@@ -235,7 +238,13 @@ fun CircleDetailView(
                         label = "X/Twitter",
                         color = Color(0xFF1DA1F2),
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            val colorSchemeParams = CustomTabColorSchemeParams.Builder()
+                                .setToolbarColor(primaryColor)
+                                .build()
+                            val customTabsIntent = CustomTabsIntent.Builder()
+                                .setDefaultColorSchemeParams(colorSchemeParams)
+                                .build()
+                            customTabsIntent.launchUrl(context, url.toUri())
                         }
                     )
                 }
@@ -244,7 +253,13 @@ fun CircleDetailView(
                         label = "Pixiv",
                         color = Color(0xFF0096FA),
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            val colorSchemeParams = CustomTabColorSchemeParams.Builder()
+                                .setToolbarColor(primaryColor)
+                                .build()
+                            val customTabsIntent = CustomTabsIntent.Builder()
+                                .setDefaultColorSchemeParams(colorSchemeParams)
+                                .build()
+                            customTabsIntent.launchUrl(context, url.toUri())
                         }
                     )
                 }
@@ -253,10 +268,17 @@ fun CircleDetailView(
                         label = "Circle.ms",
                         color = Color(0xFF4CAF50),
                         onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            val colorSchemeParams = CustomTabColorSchemeParams.Builder()
+                                .setToolbarColor(primaryColor)
+                                .build()
+                            val customTabsIntent = CustomTabsIntent.Builder()
+                                .setDefaultColorSchemeParams(colorSchemeParams)
+                                .build()
+                            customTabsIntent.launchUrl(context, url.toUri())
                         }
                     )
                 }
+
             }
         }
 
@@ -268,8 +290,15 @@ fun CircleDetailView(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                         .clickable {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            val colorSchemeParams = CustomTabColorSchemeParams.Builder()
+                                .setToolbarColor(primaryColor)
+                                .build()
+                            val customTabsIntent = CustomTabsIntent.Builder()
+                                .setDefaultColorSchemeParams(colorSchemeParams)
+                                .build()
+                            customTabsIntent.launchUrl(context, url.toUri())
                         },
+
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(

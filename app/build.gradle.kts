@@ -4,6 +4,22 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun loadProperties(filename: String): Map<String, String> {
+    val properties = mutableMapOf<String, String>()
+    val file = rootProject.file(filename)
+    if (file.exists()) {
+        file.reader().use { reader ->
+            reader.buffered().forEachLine { line ->
+                if (!line.startsWith("#") && line.contains("=")) {
+                    val (key, value) = line.split("=", limit = 2)
+                    properties[key.trim()] = value.trim()
+                }
+            }
+        }
+    }
+    return properties
+}
+
 android {
     namespace = "com.tsubuzaki.circlesgo"
     compileSdk = 36
@@ -16,13 +32,26 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val localProperties = loadProperties("local.properties")
+            storeFile = localProperties["signing.storeFile"]?.let { file(it) }
+            storePassword = localProperties["signing.storePassword"]
+            keyAlias = localProperties["signing.keyAlias"]
+            keyPassword = localProperties["signing.keyPassword"]
+        }
+    }
+
     buildTypes {
         debug {
+            isDebuggable = true
             buildConfigField("String", "CIRCLEMS_AUTH_ENDPOINT", "\"https://auth1-sandbox.circle.ms\"")
             buildConfigField("String", "CIRCLEMS_API_ENDPOINT", "\"https://api1-sandbox.circle.ms\"")
         }
         release {
+            isDebuggable = false
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

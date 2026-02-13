@@ -92,9 +92,6 @@ fun UnifiedView(
                     database = database,
                     selections = selections,
                     events = events,
-                    onMyTapped = {
-                        unifier.setIsMyComiketPresenting(true)
-                    }
                 )
             },
             sheetContent = {
@@ -124,6 +121,7 @@ fun UnifiedView(
                     favorites = favorites,
                     onCircleTapped = { circleID ->
                         // Navigate to circle detail when tapped
+                        println(circleID)
                         unifier.show()
                     }
                 )

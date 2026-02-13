@@ -37,7 +37,6 @@ fun UnifiedTopBar(
     database: CatalogDatabase,
     selections: UserSelections,
     events: com.tsubuzaki.circlesgo.state.Events,
-    onMyTapped: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -47,9 +46,11 @@ fun UnifiedTopBar(
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier
-            .weight(1f)
-            .align(Alignment.CenterVertically)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .align(Alignment.CenterVertically)
+        ) {
             UnifiedControl(
                 database = database,
                 selections = selections
