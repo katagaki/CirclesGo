@@ -2,7 +2,6 @@ package com.tsubuzaki.circlesgo.data.local
 
 import android.content.Context
 import com.tsubuzaki.circlesgo.api.catalog.UserFavorites
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class FavoritesCache(context: Context) {

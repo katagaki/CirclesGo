@@ -53,76 +53,76 @@ fun UnifiedView(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-    // Sign out dialog
-    if (isGoingToSignOut) {
-        AlertDialog(
-            onDismissRequest = { unifier.setIsGoingToSignOut(false) },
-            title = { Text("Sign Out") },
-            text = { Text("Are you sure you want to sign out? All downloaded data will be deleted.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    unifier.setIsGoingToSignOut(false)
-                    onLogout()
-                }) {
-                    Text("Sign Out")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { unifier.setIsGoingToSignOut(false) }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = 360.dp,
-        topBar = {
-            UnifiedTopBar(
-                unifier = unifier,
-                database = database,
-                selections = selections,
-                onMyTapped = {
-                    unifier.setIsMyComiketPresenting(true)
-                }
-            )
-        },
-        sheetContent = {
-            UnifiedPanel(
-                unifier = unifier,
-                events = events,
-                database = database,
-                favorites = favorites,
-                selections = selections,
-                mapper = mapper,
-                catalogCache = catalogCache
-            )
-        },
-        sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        sheetShadowElevation = 16.dp
-    ) { innerPadding ->
-        // Main map view content
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            MapView(
-                database = database,
-                mapper = mapper,
-                selections = selections,
-                favorites = favorites,
-                onCircleTapped = { circleID ->
-                    // Navigate to circle detail when tapped
-                    unifier.show()
+        // Sign out dialog
+        if (isGoingToSignOut) {
+            AlertDialog(
+                onDismissRequest = { unifier.setIsGoingToSignOut(false) },
+                title = { Text("Sign Out") },
+                text = { Text("Are you sure you want to sign out? All downloaded data will be deleted.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        unifier.setIsGoingToSignOut(false)
+                        onLogout()
+                    }) {
+                        Text("Sign Out")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { unifier.setIsGoingToSignOut(false) }) {
+                        Text("Cancel")
+                    }
                 }
             )
         }
-    }
 
-    // Progress overlay (shown during database download/loading)
-    ProgressOverlay(oasis = oasis)
+        BottomSheetScaffold(
+            scaffoldState = scaffoldState,
+            sheetPeekHeight = 360.dp,
+            topBar = {
+                UnifiedTopBar(
+                    unifier = unifier,
+                    database = database,
+                    selections = selections,
+                    onMyTapped = {
+                        unifier.setIsMyComiketPresenting(true)
+                    }
+                )
+            },
+            sheetContent = {
+                UnifiedPanel(
+                    unifier = unifier,
+                    events = events,
+                    database = database,
+                    favorites = favorites,
+                    selections = selections,
+                    mapper = mapper,
+                    catalogCache = catalogCache
+                )
+            },
+            sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            sheetShadowElevation = 16.dp
+        ) { innerPadding ->
+            // Main map view content
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                MapView(
+                    database = database,
+                    mapper = mapper,
+                    selections = selections,
+                    favorites = favorites,
+                    onCircleTapped = { circleID ->
+                        // Navigate to circle detail when tapped
+                        unifier.show()
+                    }
+                )
+            }
+        }
+
+        // Progress overlay (shown during database download/loading)
+        ProgressOverlay(oasis = oasis)
 
     } // end outer Box
 }

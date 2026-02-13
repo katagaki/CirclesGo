@@ -51,7 +51,7 @@ fun MapView(
 
     var mapImage by remember { mutableStateOf<Bitmap?>(null) }
     var genreImage by remember { mutableStateOf<Bitmap?>(null) }
-    var zoomScale by remember { mutableFloatStateOf(1f) }
+    var zoomScale by remember { mutableFloatStateOf(1.0f) }
 
     val spaceSize = if (useHighResolutionMaps) 40 else 20
 
@@ -153,6 +153,8 @@ fun MapView(
                 onZoomChange = { zoomScale = it },
                 scrollToPosition = scrollToPosition,
                 onScrollCompleted = { mapper.clearScrollToPosition() },
+                canvasWidth = canvasWidth,
+                canvasHeight = canvasHeight,
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box {
