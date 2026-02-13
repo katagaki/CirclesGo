@@ -169,8 +169,8 @@ private fun calculatePopoverPosition(
     popoverEdgePadding: Float,
     zoomScale: Float
 ): PointF {
-    var cw = canvasWidth.value
-    var ch = canvasHeight.value
+    val cw = canvasWidth.value
+    val ch = canvasHeight.value
 
     val pw = popoverWidth / zoomScale
     val ph = popoverHeight / zoomScale

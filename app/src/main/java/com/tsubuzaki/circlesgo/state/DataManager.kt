@@ -9,6 +9,7 @@ import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.CatalogDatabaseDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.content.edit
 
 class DataManager(
     private val context: Context,
@@ -35,7 +36,7 @@ class DataManager(
 
     private var isDatabaseInitialized: Boolean
         get() = prefs.getBoolean(DATABASE_INITIALIZED_KEY, false)
-        set(value) = prefs.edit().putBoolean(DATABASE_INITIALIZED_KEY, value).apply()
+        set(value) = prefs.edit { putBoolean(DATABASE_INITIALIZED_KEY, value) }
 
     suspend fun reloadData(
         forceDownload: Boolean = false,

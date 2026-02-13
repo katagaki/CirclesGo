@@ -8,6 +8,7 @@ import com.tsubuzaki.circlesgo.api.catalog.WebCatalogEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
+import androidx.core.content.edit
 
 class Events(private val context: Context) {
 
@@ -34,13 +35,13 @@ class Events(private val context: Context) {
     var isActiveEventLatest: Boolean
         get() = prefs.getBoolean(ACTIVE_EVENT_IS_LATEST_KEY, false)
         set(value) {
-            prefs.edit().putBoolean(ACTIVE_EVENT_IS_LATEST_KEY, value).apply()
+            prefs.edit { putBoolean(ACTIVE_EVENT_IS_LATEST_KEY, value)}
         }
 
     fun setActiveEvent(number: Int) {
         if (activeEventNumber != number) {
             activeEventNumber = number
-            prefs.edit().putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber).apply()
+            prefs.edit { putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber)}
 
             // update _activeEvent immediately if data is available
             val eventInList = eventData?.list?.firstOrNull { it.number == activeEventNumber }
@@ -57,7 +58,7 @@ class Events(private val context: Context) {
         if (eventData != null && latestEvent != null) {
             if (activeEventNumber == -1) {
                 activeEventNumber = latestEvent!!.number
-                prefs.edit().putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber).apply()
+                prefs.edit { putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber)}
                 isActiveEventLatest = true
             }
             isActiveEventLatest = activeEventNumber == eventData!!.latestEventNumber
@@ -127,6 +128,6 @@ class Events(private val context: Context) {
         eventObj.put(day.toString(), value)
         json.put(eventKey, eventObj)
 
-        prefs.edit().putString(PARTICIPATION_KEY, json.toString()).apply()
+        prefs.edit { putString(PARTICIPATION_KEY, json.toString()) }
     }
 }

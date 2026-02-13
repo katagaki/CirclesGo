@@ -13,6 +13,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipFile
 
 class CatalogDatabaseDownloader(
     private val catalogDatabase: CatalogDatabase
@@ -129,7 +130,9 @@ class CatalogDatabaseDownloader(
     ): File? {
         return try {
             var extractedFile: File? = null
-            java.util.zip.ZipFile(zipFile).use { zip ->
+            withContext(Dispatchers.IO) {
+                ZipFile(zipFile)
+            }.use { zip ->
                 val entries = zip.entries().asSequence().toList()
                 val totalSize = entries.filter { !it.isDirectory }.sumOf { it.size }.toDouble()
                 var extractedSize = 0.0
@@ -138,7 +141,7 @@ class CatalogDatabaseDownloader(
                     val outFile = File(destinationDir, entry.name)
                     // Guard against zip slip
                     if (!outFile.canonicalPath.startsWith(destinationDir.canonicalPath)) {
-                        throw SecurityException("Zip entry outside target directory: ${'$'}{entry.name}")
+                        throw SecurityException($$"Zip entry outside target directory: ${entry.name}")
                     }
 
                     if (entry.isDirectory) {

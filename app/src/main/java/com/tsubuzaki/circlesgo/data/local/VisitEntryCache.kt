@@ -3,6 +3,7 @@ package com.tsubuzaki.circlesgo.data.local
 import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import androidx.core.content.edit
 
 class VisitEntryCache(context: Context) {
 
@@ -47,6 +48,6 @@ class VisitEntryCache(context: Context) {
     }
 
     private fun saveAll(entries: List<VisitEntry>) {
-        prefs.edit().putString(ENTRIES_KEY, json.encodeToString(entries)).apply()
+        prefs.edit { putString(ENTRIES_KEY, json.encodeToString(entries)) }
     }
 }

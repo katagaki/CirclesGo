@@ -8,6 +8,7 @@ import com.tsubuzaki.circlesgo.database.tables.ComiketGenre
 import com.tsubuzaki.circlesgo.database.tables.ComiketMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.core.content.edit
 
 class UserSelections(context: Context) {
 
@@ -40,31 +41,33 @@ class UserSelections(context: Context) {
             _genres.value = emptySet()
             prefs.edit().putStringSet(SELECTED_GENRES_KEY, emptySet()).apply()
             _blocks.value = emptySet()
-            prefs.edit().putStringSet(SELECTED_BLOCKS_KEY, emptySet()).apply()
+            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet())}
         }
     }
 
     fun setMap(map: ComiketMap?) {
         if (_map.value != map) {
             _map.value = map
-            prefs.edit().putInt(SELECTED_MAP_KEY, map?.id ?: 0).apply()
+            prefs.edit { putInt(SELECTED_MAP_KEY, map?.id ?: 0) }
             _genres.value = emptySet()
-            prefs.edit().putStringSet(SELECTED_GENRES_KEY, emptySet()).apply()
+            prefs.edit { putStringSet(SELECTED_GENRES_KEY, emptySet()) }
             _blocks.value = emptySet()
-            prefs.edit().putStringSet(SELECTED_BLOCKS_KEY, emptySet()).apply()
+            prefs.edit { putStringSet(SELECTED_BLOCKS_KEY, emptySet())}
         }
     }
 
     fun setBlocks(blocks: Set<ComiketBlock>) {
         _blocks.value = blocks
-        prefs.edit().putStringSet(SELECTED_BLOCKS_KEY, blocks.map { it.id.toString() }.toSet())
-            .apply()
+        prefs.edit {
+            putStringSet(SELECTED_BLOCKS_KEY, blocks.map { it.id.toString() }.toSet())
+            }
     }
 
     fun setGenres(genres: Set<ComiketGenre>) {
         _genres.value = genres
-        prefs.edit().putStringSet(SELECTED_GENRES_KEY, genres.map { it.id.toString() }.toSet())
-            .apply()
+        prefs.edit {
+            putStringSet(SELECTED_GENRES_KEY, genres.map { it.id.toString() }.toSet())
+            }
     }
 
     fun reloadData(database: CatalogDatabase) {
@@ -102,12 +105,12 @@ class UserSelections(context: Context) {
         }
 
     fun resetSelections() {
-        prefs.edit()
-            .putInt(SELECTED_DATE_KEY, 0)
-            .putInt(SELECTED_MAP_KEY, 0)
-            .putStringSet(SELECTED_GENRES_KEY, emptySet())
-            .putStringSet(SELECTED_BLOCKS_KEY, emptySet())
-            .apply()
+        prefs.edit {
+            putInt(SELECTED_DATE_KEY, 0)
+                .putInt(SELECTED_MAP_KEY, 0)
+                .putStringSet(SELECTED_GENRES_KEY, emptySet())
+                .putStringSet(SELECTED_BLOCKS_KEY, emptySet())
+        }
         _genres.value = emptySet()
         _blocks.value = emptySet()
     }

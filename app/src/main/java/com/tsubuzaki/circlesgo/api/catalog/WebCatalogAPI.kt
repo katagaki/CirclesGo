@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import androidx.core.content.edit
 
 object WebCatalogAPI {
 
@@ -29,7 +30,7 @@ object WebCatalogAPI {
                 val events = json.decodeFromString(WebCatalogEvent.serializer(), responseBody)
                 // Cache the response
                 val prefs = context.getSharedPreferences("circles_prefs", Context.MODE_PRIVATE)
-                prefs.edit().putString(EVENT_CACHE_KEY, responseBody).apply()
+                prefs.edit { putString(EVENT_CACHE_KEY, responseBody) }
                 events.response
             } else {
                 Log.e(TAG, "Failed to fetch events: HTTP $responseCode")

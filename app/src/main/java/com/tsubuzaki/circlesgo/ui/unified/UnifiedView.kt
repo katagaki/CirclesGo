@@ -125,7 +125,7 @@ fun UnifiedView(
         }
 
         // Floating toolbar
-        if (!(scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded)) {
+        if (scaffoldState.bottomSheetState.targetValue != SheetValue.Expanded) {
             HorizontalFloatingToolbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

@@ -6,6 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.tsubuzaki.circlesgo.api.auth.OpenIDToken
 import kotlinx.serialization.json.Json
+import androidx.core.content.edit
 
 class TokenStore(context: Context) {
 
@@ -34,7 +35,7 @@ class TokenStore(context: Context) {
 
     fun saveToken(token: OpenIDToken) {
         val tokenJson = json.encodeToString(OpenIDToken.serializer(), token)
-        encryptedPrefs.edit().putString(KEY_AUTH_TOKEN, tokenJson).apply()
+        encryptedPrefs.edit { putString(KEY_AUTH_TOKEN, tokenJson)}
     }
 
     fun getToken(): OpenIDToken? {
@@ -47,11 +48,11 @@ class TokenStore(context: Context) {
     }
 
     fun clearToken() {
-        encryptedPrefs.edit().remove(KEY_AUTH_TOKEN).apply()
+        encryptedPrefs.edit {remove(KEY_AUTH_TOKEN)}
     }
 
     fun saveTokenExpiryDate(expiryMillis: Long) {
-        regularPrefs.edit().putLong(KEY_TOKEN_EXPIRY, expiryMillis).apply()
+        regularPrefs.edit { putLong(KEY_TOKEN_EXPIRY, expiryMillis)}
     }
 
     fun getTokenExpiryDate(): Long {
@@ -59,7 +60,7 @@ class TokenStore(context: Context) {
     }
 
     fun clearTokenExpiryDate() {
-        regularPrefs.edit().remove(KEY_TOKEN_EXPIRY).apply()
+        regularPrefs.edit { remove(KEY_TOKEN_EXPIRY) }
     }
 
     fun clearAll() {
