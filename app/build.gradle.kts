@@ -89,9 +89,6 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
-    // AndroidX Security
-    implementation(libs.security.crypto)
-
     // AndroidX Browser (Custom Tabs)
     implementation(libs.browser)
 
