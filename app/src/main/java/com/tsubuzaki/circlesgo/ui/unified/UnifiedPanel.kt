@@ -1,24 +1,15 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.ButtonGroup
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.FavoritesState
@@ -30,7 +21,6 @@ import com.tsubuzaki.circlesgo.ui.catalog.CatalogView
 import com.tsubuzaki.circlesgo.ui.circledetail.CircleDetailView
 import com.tsubuzaki.circlesgo.ui.favorites.FavoritesView
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UnifiedPanel(
     unifier: Unifier,
@@ -59,57 +49,24 @@ fun UnifiedPanel(
                 unifier = unifier
             )
         } else {
-            // Segmented picker: Circles / Favorites
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Tab row: Circles / Favorites
+            val tabs = listOf(UnifiedPath.CIRCLES, UnifiedPath.FAVORITES)
+            val selectedIndex = tabs.indexOf(currentPath).coerceAtLeast(0)
+
+            SecondaryTabRow(
+                selectedTabIndex = selectedIndex,
+                containerColor = Color.Transparent
             ) {
-                ButtonGroup(
-                    {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = null,
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    expandedRatio = 0.0f,
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    toggleableItem(
-                        checked = currentPath == UnifiedPath.CIRCLES,
-                        label = "Circles",
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Dashboard,
-                                contentDescription = null,
-                            )
-                        },
-                        onCheckedChange = {
-                            if (it) {
-                                unifier.setCurrentPath(UnifiedPath.CIRCLES)
-                            }
-                        }
-                    )
-                    toggleableItem(
-                        checked = currentPath == UnifiedPath.FAVORITES,
-                        label = "Favorites",
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Star,
-                                contentDescription = null,
-                            )
-                        },
-                        onCheckedChange = {
-                            if (it) {
-                                unifier.setCurrentPath(UnifiedPath.FAVORITES)
-                            }
-                        }
-                    )
-                }
+                Tab(
+                    selected = currentPath == UnifiedPath.CIRCLES,
+                    onClick = { unifier.setCurrentPath(UnifiedPath.CIRCLES) },
+                    text = { Text("Circles") },
+                )
+                Tab(
+                    selected = currentPath == UnifiedPath.FAVORITES,
+                    onClick = { unifier.setCurrentPath(UnifiedPath.FAVORITES) },
+                    text = { Text("Favorites") },
+                )
             }
 
             // Content based on current path

@@ -87,7 +87,7 @@ fun CatalogToolbar(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 4.dp)
+        modifier = Modifier.padding(horizontal = 16.dp)
     ) {
         GenreFilterMenu(
             selectedGenres = selectedGenres,
