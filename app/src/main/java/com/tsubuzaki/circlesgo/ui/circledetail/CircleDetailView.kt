@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.HorizontalDivider
@@ -48,7 +47,6 @@ import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.state.FavoritesState
-import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.ui.shared.CircleBlockPill
 import com.tsubuzaki.circlesgo.ui.shared.CircleBlockPillSize
@@ -61,7 +59,6 @@ fun CircleDetailView(
     circle: ComiketCircle,
     database: CatalogDatabase,
     favorites: FavoritesState,
-    mapper: Mapper,
     unifier: Unifier
 ) {
     val context = LocalContext.current
@@ -117,15 +114,6 @@ fun CircleDetailView(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-            }
-            // Show on map button
-            IconButton(onClick = {
-                mapper.setHighlightTarget(circle)
-            }) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = "Show on map"
-                )
             }
         }
 

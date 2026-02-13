@@ -50,7 +50,6 @@ fun UnifiedPanel(
                 circle = selectedCircle!!,
                 database = database,
                 favorites = favorites,
-                mapper = mapper,
                 unifier = unifier
             )
         } else {
