@@ -1,8 +1,8 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
-import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +10,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,6 +21,7 @@ import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
@@ -31,8 +35,7 @@ import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.map.MapView
 import com.tsubuzaki.circlesgo.ui.shared.ProgressOverlay
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UnifiedView(
     unifier: Unifier,
@@ -88,14 +91,6 @@ fun UnifiedView(
                     modifier = if (isExpanded) Modifier.statusBarsPadding() else Modifier
                 )
             },
-            topBar = {
-                UnifiedTopBar(
-                    unifier = unifier,
-                    database = database,
-                    selections = selections,
-                    events = events,
-                )
-            },
             sheetContent = {
                 UnifiedPanel(
                     unifier = unifier,
@@ -127,6 +122,30 @@ fun UnifiedView(
                     }
                 )
             }
+        }
+
+        // Floating toolbar
+        if (!(scaffoldState.bottomSheetState.targetValue == SheetValue.Expanded)) {
+            HorizontalFloatingToolbar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = -FloatingToolbarDefaults.ScreenOffset)
+                    .padding(16.dp),
+                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                expanded = true,
+                leadingContent = {
+                    UnifiedControl(
+                        database = database,
+                        selections = selections
+                    )
+                },
+                trailingContent = {
+                    UnifiedMoreMenu(
+                        unifier = unifier,
+                        events = events
+                    )
+                }
+            ) { }
         }
 
         // Progress overlay (shown during database download/loading)

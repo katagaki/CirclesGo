@@ -2,6 +2,7 @@ package com.tsubuzaki.circlesgo.ui.catalog
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +24,7 @@ import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.GridDisplayMode
 import com.tsubuzaki.circlesgo.ui.shared.CircleCutImage
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun CircleGrid(
     circles: List<ComiketCircle>,
@@ -57,7 +61,9 @@ fun CircleGrid(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize(),
+            contentPadding = PaddingValues(bottom = FloatingToolbarDefaults.ScreenOffset),
             state = gridState
         ) {
             itemsIndexed(

@@ -1,8 +1,6 @@
 package com.tsubuzaki.circlesgo.ui.unified
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,7 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,29 +41,17 @@ fun UnifiedControl(
     val selectedMap by selections.map.collectAsState()
 
     if (selectedDate != null && selectedMap != null) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = 4.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                DatePickerButton(
-                    selectedDate = selectedDate,
-                    database = database,
-                    onDateSelected = { selections.setDate(it) }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                HallPickerButton(
-                    selectedMap = selectedMap,
-                    database = database,
-                    onMapSelected = { selections.setMap(it) }
-                )
-            }
-        }
+        DatePickerButton(
+            selectedDate = selectedDate,
+            database = database,
+            onDateSelected = { selections.setDate(it) }
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        HallPickerButton(
+            selectedMap = selectedMap,
+            database = database,
+            onMapSelected = { selections.setMap(it) }
+        )
     }
 }
 
@@ -80,42 +65,44 @@ private fun DatePickerButton(
     val dates = remember { database.dates() }
     val dateFormatter = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()) }
 
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Column {
-                selectedDate?.let { date ->
-                    Text(
-                        text = "Day ${date.id}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = dateFormatter.format(date.date),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } ?: Text("No day")
-            }
-        }
-
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            for (date in dates) {
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Day ${date.id}")
-                            if (date == selectedDate) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("✓", fontSize = 12.sp)
-                            }
-                        }
-                    },
-                    onClick = {
-                        onDateSelected(date)
-                        expanded = false
-                    }
+    TextButton(
+        modifier = Modifier
+            .clip(CircleShape),
+        onClick = { expanded = true }
+    ) {
+        Column {
+            selectedDate?.let { date ->
+                Text(
+                    text = "Day ${date.id}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
                 )
-            }
+                Text(
+                    text = dateFormatter.format(date.date),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } ?: Text("No day")
+        }
+    }
+
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        for (date in dates) {
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Day ${date.id}")
+                        if (date == selectedDate) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("✓", fontSize = 12.sp)
+                        }
+                    }
+                },
+                onClick = {
+                    onDateSelected(date)
+                    expanded = false
+                }
+            )
         }
     }
 }
@@ -130,44 +117,43 @@ private fun HallPickerButton(
     val maps = remember { database.maps() }
     val accentColor = accentColorForMap(selectedMap)
 
-    Box {
-        TextButton(
-            onClick = { expanded = true },
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(accentColor)
+    TextButton(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(accentColor)
+            .padding(horizontal = 4.dp),
+        onClick = { expanded = true },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 4.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            ) {
-                Text(
-                    text = selectedMap?.name ?: "No hall",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
-            }
+            Text(
+                text = selectedMap?.name ?: "No hall",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
         }
+    }
 
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            for (map in maps) {
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(map.name)
-                            if (map == selectedMap) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("✓", fontSize = 12.sp)
-                            }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        for (map in maps) {
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(map.name)
+                        if (map == selectedMap) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("✓", fontSize = 12.sp)
                         }
-                    },
-                    onClick = {
-                        onMapSelected(map)
-                        expanded = false
                     }
-                )
-            }
+                },
+                onClick = {
+                    onMapSelected(map)
+                    expanded = false
+                }
+            )
         }
     }
 }
@@ -175,10 +161,10 @@ private fun HallPickerButton(
 private fun accentColorForMap(map: ComiketMap?): Color {
     if (map != null) {
         return when {
-            map.name.startsWith("東") -> Color.Red
-            map.name.startsWith("西") -> Color.Blue
-            map.name.startsWith("南") -> Color.Green
-            map.name.startsWith("会") -> Color.Gray
+            map.name.startsWith("東") -> Color.hsv(358f, 0.77f, 0.78f)
+            map.name.startsWith("西") -> Color.hsv(215f, 0.77f, 0.59f)
+            map.name.startsWith("南") -> Color.hsv(120f, 0.56f, 0.47f)
+            map.name.startsWith("会") -> Color.hsv(34f, 0.16f, 0.50f)
             else -> Color.Unspecified
         }
     }

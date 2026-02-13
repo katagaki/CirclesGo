@@ -2,6 +2,7 @@ package com.tsubuzaki.circlesgo.ui.unified
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -21,6 +22,7 @@ import com.tsubuzaki.circlesgo.ui.catalog.CatalogView
 import com.tsubuzaki.circlesgo.ui.circledetail.CircleDetailView
 import com.tsubuzaki.circlesgo.ui.favorites.FavoritesView
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UnifiedPanel(
     unifier: Unifier,
@@ -38,7 +40,10 @@ fun UnifiedPanel(
     val isShowingCircleDetail =
         sheetPath.lastOrNull() == UnifiedPath.CIRCLE_DETAIL && selectedCircle != null
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+    ) {
         if (isShowingCircleDetail) {
             // Circle detail view (pushed on top)
             CircleDetailView(
