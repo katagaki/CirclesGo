@@ -86,14 +86,34 @@ fun CatalogView(
             scope.launch(Dispatchers.IO) {
                 val circleIDs = CatalogCache.searchCircles(searchTerm, database)
                 if (circleIDs != null) {
-                    val circles = database.circles(circleIDs)
-                    catalogCache.setSearchedCircles(circles)
+                    val firstPageIDs = circleIDs.take(50)
+                    val circles = database.circles(firstPageIDs)
+                    catalogCache.setSearchedCircles(circles, circleIDs)
                 } else {
-                    catalogCache.setSearchedCircles(null)
+                    catalogCache.setSearchedCircles(null, null)
                 }
             }
         } else {
-            catalogCache.setSearchedCircles(null)
+            catalogCache.setSearchedCircles(null, null)
+        }
+    }
+
+    var isCurrentlyLoadingMore by remember { mutableStateOf(false) }
+
+    val onLoadMore: () -> Unit = {
+        if (!isCurrentlyLoadingMore) {
+            isCurrentlyLoadingMore = true
+            scope.launch(Dispatchers.IO) {
+                try {
+                    if (searchedCircles != null) {
+                        catalogCache.loadMoreSearchedCircles(database)
+                    } else {
+                        catalogCache.loadMoreDisplayedCircles(database)
+                    }
+                } finally {
+                    isCurrentlyLoadingMore = false
+                }
+            }
         }
     }
 
@@ -208,7 +228,9 @@ fun CatalogView(
                                     favorites = favorites,
                                     onSelect = { circle ->
                                         unifier.showCircleDetail(circle)
-                                    }
+                                    },
+                                    onLoadMore = onLoadMore,
+                                    isLoadingMore = isCurrentlyLoadingMore
                                 )
                             }
 
@@ -220,7 +242,9 @@ fun CatalogView(
                                     favorites = favorites,
                                     onSelect = { circle ->
                                         unifier.showCircleDetail(circle)
-                                    }
+                                    },
+                                    onLoadMore = onLoadMore,
+                                    isLoadingMore = isCurrentlyLoadingMore
                                 )
                             }
                         }
@@ -256,7 +280,8 @@ private suspend fun reloadDisplayedCircles(
         database = database
     )
 
-    val circles = database.circles(circleIDs)
-    catalogCache.setDisplayedCircles(circles)
+    val firstPageIDs = circleIDs.take(50)
+    val circles = database.circles(firstPageIDs)
+    catalogCache.setDisplayedCircles(circles, circleIDs)
     catalogCache.setIsLoading(false)
 }

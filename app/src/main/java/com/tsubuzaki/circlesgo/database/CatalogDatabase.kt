@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
+import android.util.LruCache
 import com.tsubuzaki.circlesgo.api.catalog.WebCatalogDatabase
 import com.tsubuzaki.circlesgo.api.catalog.WebCatalogEvent
 import com.tsubuzaki.circlesgo.database.tables.ComiketBlock
@@ -33,8 +34,16 @@ class CatalogDatabase(private val context: Context) {
     private var imageDatabaseFile: File? = null
 
     private val commonImages = mutableMapOf<String, ByteArray>()
-    private val circleImages = mutableMapOf<Int, ByteArray>()
-    private val imageCache = mutableMapOf<String, Bitmap>()
+
+    private val imageCache: LruCache<String, Bitmap> = run {
+        val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+        val cacheSize = maxMemory / 8
+        object : LruCache<String, Bitmap>(cacheSize) {
+            override fun sizeOf(key: String, bitmap: Bitmap): Int {
+                return bitmap.byteCount / 1024
+            }
+        }
+    }
 
     private val _commonImagesLoadCount = MutableStateFlow(0)
     val commonImagesLoadCount: StateFlow<Int> = _commonImagesLoadCount
@@ -115,8 +124,7 @@ class CatalogDatabase(private val context: Context) {
         databaseInformation = null
         disconnect()
         commonImages.clear()
-        circleImages.clear()
-        imageCache.clear()
+        imageCache.evictAll()
         dataStoreDir.deleteRecursively()
     }
 
@@ -136,8 +144,7 @@ class CatalogDatabase(private val context: Context) {
             imageDatabase = null
             imageDatabaseFile = null
             commonImages.clear()
-            circleImages.clear()
-            imageCache.clear()
+            imageCache.evictAll()
         }
 
         targetTextFile.delete()
@@ -149,9 +156,8 @@ class CatalogDatabase(private val context: Context) {
         textDatabaseFile = null
         imageDatabaseFile = null
         disconnect()
-        imageCache.clear()
+        imageCache.evictAll()
         commonImages.clear()
-        circleImages.clear()
     }
 
     fun setDatabaseInformation(info: WebCatalogDatabase) {
@@ -203,22 +209,8 @@ class CatalogDatabase(private val context: Context) {
     }
 
     fun loadCircleImages() {
-        val db = getImageDatabase() ?: return
-        try {
-            val cursor = db.rawQuery(
-                "SELECT id, cutImage FROM ComiketCircleImage", null
-            )
-            cursor.use {
-                while (it.moveToNext()) {
-                    val id = it.getInt(0)
-                    val image = it.getBlob(1)
-                    circleImages[id] = image
-                }
-            }
-            _circleImagesLoadCount.value += 1
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load circle images", e)
-        }
+        // Circle images are now loaded on-demand from SQLite for memory efficiency
+        _circleImagesLoadCount.value += 1
     }
 
     // MARK: Text Data Fetchers
@@ -386,23 +378,40 @@ class CatalogDatabase(private val context: Context) {
     }
 
     fun circleImage(id: Int): Bitmap? {
-        imageCache[id.toString()]?.let { return it }
-        circleImages[id]?.let { data ->
-            val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
-            if (bitmap != null) {
-                imageCache[id.toString()] = bitmap
+        val cacheKey = id.toString()
+        imageCache.get(cacheKey)?.let { return it }
+
+        val db = getImageDatabase() ?: return null
+        try {
+            val cursor = db.rawQuery(
+                "SELECT cutImage FROM ComiketCircleImage WHERE id = ?",
+                arrayOf(id.toString())
+            )
+            cursor.use {
+                if (it.moveToFirst()) {
+                    val data = it.getBlob(0)
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                    val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
+                    if (bitmap != null) {
+                        imageCache.put(cacheKey, bitmap)
+                    }
+                    return bitmap
+                }
             }
-            return bitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load circle image $id", e)
         }
         return null
     }
 
     fun commonImage(imageName: String): Bitmap? {
-        imageCache[imageName]?.let { return it }
+        imageCache.get(imageName)?.let { return it }
         commonImages[imageName]?.let { data ->
             val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
             if (bitmap != null) {
-                imageCache[imageName] = bitmap
+                imageCache.put(imageName, bitmap)
             }
             return bitmap
         }

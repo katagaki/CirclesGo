@@ -40,15 +40,18 @@ fun CircleCutImage(
     val cutImage: Bitmap? = remember(circle.id) {
         database.circleImage(circle.id)
     }
+    val imageBitmap = remember(cutImage) {
+        cutImage?.asImageBitmap()
+    }
     val wcIDMappedItems by favorites.wcIDMappedItems.collectAsState()
 
     Box(
         modifier = Modifier.aspectRatio(180f / 256f),
         contentAlignment = Alignment.Center
     ) {
-        if (cutImage != null) {
+        if (imageBitmap != null) {
             Image(
-                bitmap = cutImage.asImageBitmap(),
+                bitmap = imageBitmap,
                 contentDescription = circle.circleName,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
@@ -70,7 +73,7 @@ fun CircleCutImage(
         }
 
         // Favorite color indicator overlay
-        if (cutImage != null) {
+        if (imageBitmap != null) {
             val favoriteItem: UserFavorites.Response.FavoriteItem? = remember(
                 circle.extendedInformation?.webCatalogID, wcIDMappedItems
             ) {

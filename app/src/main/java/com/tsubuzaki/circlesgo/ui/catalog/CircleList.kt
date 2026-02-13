@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -36,10 +37,29 @@ fun CircleList(
     showSpaceName: Boolean = false,
     showDay: Boolean = false,
     showsOverlayWhenEmpty: Boolean = true,
-    onSelect: (ComiketCircle) -> Unit
+    isLoadingMore: Boolean = false,
+    onSelect: (ComiketCircle) -> Unit,
+    onLoadMore: () -> Unit = {}
 ) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Trigger onLoadMore when nearing the end, using snapshotFlow to avoid
+    // recompositions on every scroll frame
+    androidx.compose.runtime.LaunchedEffect(listState, circles.size) {
+        androidx.compose.runtime.snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+        }.collect { lastIndex ->
+            if (lastIndex != null && lastIndex >= circles.size - 10) {
+                onLoadMore()
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState
+        ) {
             itemsIndexed(
                 items = circles,
                 key = { _, circle -> circle.id }
@@ -70,6 +90,22 @@ fun CircleList(
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 58.dp)
+                        )
+                    }
+                }
+            }
+
+            if (isLoadingMore) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
                         )
                     }
                 }

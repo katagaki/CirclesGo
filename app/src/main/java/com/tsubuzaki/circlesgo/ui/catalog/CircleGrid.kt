@@ -3,7 +3,9 @@ package com.tsubuzaki.circlesgo.ui.catalog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -28,7 +30,9 @@ fun CircleGrid(
     showSpaceName: Boolean = false,
     showDay: Boolean = false,
     showsOverlayWhenEmpty: Boolean = true,
-    onSelect: (ComiketCircle) -> Unit
+    isLoadingMore: Boolean = false,
+    onSelect: (ComiketCircle) -> Unit,
+    onLoadMore: () -> Unit = {}
 ) {
     val minSize = when (displayMode) {
         GridDisplayMode.BIG -> 110.dp
@@ -36,10 +40,25 @@ fun CircleGrid(
         GridDisplayMode.SMALL -> 48.dp
     }
 
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+
+    // Trigger onLoadMore when nearing the end, using snapshotFlow to avoid
+    // recompositions on every scroll frame
+    androidx.compose.runtime.LaunchedEffect(gridState, circles.size) {
+        androidx.compose.runtime.snapshotFlow {
+            gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+        }.collect { lastIndex ->
+            if (lastIndex != null && lastIndex >= circles.size - 10) {
+                onLoadMore()
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            state = gridState
         ) {
             itemsIndexed(
                 items = circles,
@@ -58,6 +77,25 @@ fun CircleGrid(
                         showSpaceName = showSpaceName,
                         showDay = showDay
                     )
+                }
+            }
+            if (isLoadingMore) {
+                item(
+                    span = {
+                        androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
                 }
             }
         }

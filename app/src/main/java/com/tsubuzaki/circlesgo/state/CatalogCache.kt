@@ -19,12 +19,48 @@ class CatalogCache {
 
     var invalidationID: String = ""
 
-    fun setDisplayedCircles(circles: List<ComiketCircle>) {
+    val hasMoreDisplayedCircles: Boolean
+        get() = _displayedCircles.value.size < allFilterResultIDs.size
+
+    val hasMoreSearchedCircles: Boolean
+        get() = _searchedCircles.value?.let { it.size < (allSearchResultIDs?.size ?: 0) } ?: false
+
+    private var allFilterResultIDs: List<Int> = emptyList()
+    private var allSearchResultIDs: List<Int>? = null
+    private val pageSize = 50
+
+    fun setDisplayedCircles(circles: List<ComiketCircle>, allIDs: List<Int>) {
+        allFilterResultIDs = allIDs
         _displayedCircles.value = circles
     }
 
-    fun setSearchedCircles(circles: List<ComiketCircle>?) {
+    fun setSearchedCircles(circles: List<ComiketCircle>?, allIDs: List<Int>?) {
+        allSearchResultIDs = allIDs
         _searchedCircles.value = circles
+    }
+
+    fun loadMoreDisplayedCircles(database: CatalogDatabase) {
+        val currentCount = _displayedCircles.value.size
+        if (currentCount >= allFilterResultIDs.size) return
+
+        val nextIDs = allFilterResultIDs.drop(currentCount).take(pageSize)
+        val nextCircles = database.circles(nextIDs)
+        if (nextCircles.isNotEmpty()) {
+            _displayedCircles.value = _displayedCircles.value + nextCircles
+        }
+    }
+
+    fun loadMoreSearchedCircles(database: CatalogDatabase) {
+        val searchIDs = allSearchResultIDs ?: return
+        val currentCircles = _searchedCircles.value ?: return
+        val currentCount = currentCircles.size
+        if (currentCount >= searchIDs.size) return
+
+        val nextIDs = searchIDs.drop(currentCount).take(pageSize)
+        val nextCircles = database.circles(nextIDs)
+        if (nextCircles.isNotEmpty()) {
+            _searchedCircles.value = currentCircles + nextCircles
+        }
     }
 
     fun setIsLoading(loading: Boolean) {

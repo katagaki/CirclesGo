@@ -89,7 +89,7 @@ fun UnifiedMoreMenu(
             // Event Picker
             events.eventData?.list?.sortedByDescending { it.number }?.forEach { event ->
                 DropdownMenuItem(
-                    text = { Text("Event ${event.number}") },
+                    text = { Text("Comic Market ${event.number}") },
                     onClick = {
                         expanded = false
                         events.setActiveEvent(event.number)
