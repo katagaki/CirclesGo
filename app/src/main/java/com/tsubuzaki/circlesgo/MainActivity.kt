@@ -28,8 +28,8 @@ import com.tsubuzaki.circlesgo.state.Oasis
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.ui.login.LoginView
-import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 import com.tsubuzaki.circlesgo.ui.theme.CirclesGoTheme
+import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -100,8 +100,12 @@ class MainActivity : ComponentActivity() {
 
                         // Watch for active event changes
                         val activeEvent by events.activeEvent.collectAsState()
-                        var previousActiveEventNumber by rememberSaveable { mutableStateOf<Int?>(null) }
-                        
+                        var previousActiveEventNumber by rememberSaveable {
+                            mutableStateOf<Int?>(
+                                null
+                            )
+                        }
+
                         LaunchedEffect(activeEvent) {
                             val currentNumber = activeEvent?.number
                             if (currentNumber != null) {

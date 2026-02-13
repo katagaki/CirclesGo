@@ -41,7 +41,7 @@ class Events(private val context: Context) {
         if (activeEventNumber != number) {
             activeEventNumber = number
             prefs.edit().putInt(ACTIVE_EVENT_NUMBER_KEY, activeEventNumber).apply()
-            
+
             // update _activeEvent immediately if data is available
             val eventInList = eventData?.list?.firstOrNull { it.number == activeEventNumber }
             if (eventInList != null) {

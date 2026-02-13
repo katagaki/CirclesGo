@@ -3,6 +3,7 @@ package com.tsubuzaki.circlesgo.ui.map
 import android.graphics.PointF
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,14 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
-
-import androidx.compose.foundation.layout.requiredSize
 
 @Composable
 fun MapScrollableView(
@@ -51,9 +51,9 @@ fun MapScrollableView(
         return Offset(offset.x.coerceIn(minX, 0f), offset.y.coerceIn(minY, 0f))
     }
 
-    LaunchedEffect(scrollToPosition, currentZoom, viewportSize) {
+    LaunchedEffect(scrollToPosition, currentZoom, viewportSize, canvasWidth, canvasHeight) {
         scrollToPosition?.let {
-            if (viewportSize != IntSize.Zero) {
+            if (viewportSize != IntSize.Zero && canvasWidth.value > 0 && canvasHeight.value > 0) {
                 val newOffset = Offset(
                     x = (viewportSize.width / 2) - (it.x * currentZoom),
                     y = (viewportSize.height / 2) - (it.y * currentZoom)
@@ -84,13 +84,12 @@ fun MapScrollableView(
     ) {
         Box(
             modifier = Modifier
-                .requiredSize(canvasWidth, canvasHeight)
                 .graphicsLayer(
                     scaleX = currentZoom,
                     scaleY = currentZoom,
                     translationX = offset.x,
                     translationY = offset.y,
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                    transformOrigin = TransformOrigin(0f, 0f)
                 )
         ) {
             content()

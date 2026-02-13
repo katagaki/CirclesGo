@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -14,9 +13,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,10 +44,12 @@ fun UnifiedTopBar(
             .fillMaxWidth()
             .statusBarsPadding()
             .height(64.dp)
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.weight(1f).align(Alignment.CenterVertically)) {
+        Box(modifier = Modifier
+            .weight(1f)
+            .align(Alignment.CenterVertically)) {
             UnifiedControl(
                 database = database,
                 selections = selections
@@ -66,45 +68,48 @@ fun UnifiedMoreMenu(
     events: com.tsubuzaki.circlesgo.state.Events
 ) {
     var expanded by remember { mutableStateOf(false) }
-
-    IconButton(
-        onClick = { expanded = true },
-        modifier = Modifier.background(MaterialTheme.colorScheme.surface, CircleShape)
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp
     ) {
-        Icon(
-            imageVector = Icons.Default.MoreVert,
-            contentDescription = "More"
-        )
-    }
-
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = { expanded = false }
-    ) {
-        // Event Picker
-        events.eventData?.list?.sortedByDescending { it.number }?.forEach { event ->
-            DropdownMenuItem(
-                text = { Text("Event ${event.number}") },
-                onClick = {
-                    expanded = false
-                    events.setActiveEvent(event.number)
-                },
-                leadingIcon = if (event.number == events.activeEventNumber) {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected"
-                        )
-                    }
-                } else null
+        IconButton(
+            onClick = { expanded = true },
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More"
             )
         }
-        DropdownMenuItem(
-            text = { Text("Sign Out") },
-            onClick = {
-                expanded = false
-                unifier.setIsGoingToSignOut(true)
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            // Event Picker
+            events.eventData?.list?.sortedByDescending { it.number }?.forEach { event ->
+                DropdownMenuItem(
+                    text = { Text("Event ${event.number}") },
+                    onClick = {
+                        expanded = false
+                        events.setActiveEvent(event.number)
+                    },
+                    leadingIcon = if (event.number == events.activeEventNumber) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected"
+                            )
+                        }
+                    } else null
+                )
             }
-        )
+            DropdownMenuItem(
+                text = { Text("Sign Out") },
+                onClick = {
+                    expanded = false
+                    unifier.setIsGoingToSignOut(true)
+                }
+            )
+        }
     }
 }

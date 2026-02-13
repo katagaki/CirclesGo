@@ -2,7 +2,6 @@ package com.tsubuzaki.circlesgo.ui.map
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -146,86 +145,85 @@ fun MapView(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        val currentMapImage = mapImage
-        if (currentMapImage != null) {
-            MapScrollableView(
-                zoomScale = zoomScale,
-                onZoomChange = { zoomScale = it },
-                scrollToPosition = scrollToPosition,
-                onScrollCompleted = { mapper.clearScrollToPosition() },
-                canvasWidth = canvasWidth,
-                canvasHeight = canvasHeight,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Box {
-                    // Layer 1: Base map image
-                    MapImageLayer(
-                        bitmap = currentMapImage,
-                        canvasWidth = canvasWidth,
-                        canvasHeight = canvasHeight
-                    )
+    val currentMapImage = mapImage
+    if (currentMapImage != null) {
+        MapScrollableView(
+            zoomScale = zoomScale,
+            onZoomChange = { zoomScale = it },
+            scrollToPosition = scrollToPosition,
+            onScrollCompleted = { mapper.clearScrollToPosition() },
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            Box {
+                // Layer 1: Base map image
+                MapImageLayer(
+                    bitmap = currentMapImage,
+                    canvasWidth = canvasWidth,
+                    canvasHeight = canvasHeight
+                )
 
-                    // Layer 2: Favorites overlay
-                    MapFavoritesLayer(
-                        layouts = layouts,
-                        favoriteItems = favoriteItems ?: emptyMap(),
-                        spaceSize = spaceSize,
-                        canvasWidth = canvasWidth,
-                        canvasHeight = canvasHeight,
-                        database = database
-                    )
+                // Layer 2: Favorites overlay
+                MapFavoritesLayer(
+                    layouts = layouts,
+                    favoriteItems = favoriteItems ?: emptyMap(),
+                    spaceSize = spaceSize,
+                    canvasWidth = canvasWidth,
+                    canvasHeight = canvasHeight,
+                    database = database
+                )
 
-                    // Layer 3: Genre overlay
-                    if (showGenreOverlay) {
-                        genreImage?.let { genre ->
-                            MapImageLayer(
-                                bitmap = genre,
-                                canvasWidth = canvasWidth,
-                                canvasHeight = canvasHeight
-                            )
-                        }
-                    }
-
-                    // Layer 4: Layout interaction layer
-                    MapLayoutLayer(
-                        layouts = layouts,
-                        spaceSize = spaceSize,
-                        canvasWidth = canvasWidth,
-                        canvasHeight = canvasHeight,
-                        popoverData = popoverData,
-                        mapper = mapper
-                    )
-
-                    // Layer 5: Highlight layer
-                    MapHighlightLayer(
-                        highlightData = highlightData,
-                        canvasWidth = canvasWidth,
-                        canvasHeight = canvasHeight,
-                        mapper = mapper
-                    )
-
-                    // Layer 6: Popover layer
-                    popoverData?.let { data ->
-                        MapPopoverLayer(
-                            popoverData = data,
-                            zoomScale = zoomScale,
+                // Layer 3: Genre overlay
+                if (showGenreOverlay) {
+                    genreImage?.let { genre ->
+                        MapImageLayer(
+                            bitmap = genre,
                             canvasWidth = canvasWidth,
-                            canvasHeight = canvasHeight,
-                            mapper = mapper,
-                            database = database,
-                            onCircleTapped = onCircleTapped
+                            canvasHeight = canvasHeight
                         )
                     }
                 }
+
+                // Layer 4: Layout interaction layer
+                MapLayoutLayer(
+                    layouts = layouts,
+                    spaceSize = spaceSize,
+                    canvasWidth = canvasWidth,
+                    canvasHeight = canvasHeight,
+                    popoverData = popoverData,
+                    mapper = mapper
+                )
+
+                // Layer 5: Highlight layer
+                MapHighlightLayer(
+                    highlightData = highlightData,
+                    canvasWidth = canvasWidth,
+                    canvasHeight = canvasHeight,
+                    mapper = mapper
+                )
+
+                // Layer 6: Popover layer
+                popoverData?.let { data ->
+                    MapPopoverLayer(
+                        popoverData = data,
+                        zoomScale = zoomScale,
+                        canvasWidth = canvasWidth,
+                        canvasHeight = canvasHeight,
+                        mapper = mapper,
+                        database = database,
+                        onCircleTapped = onCircleTapped
+                    )
+                }
             }
-        } else {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No map selected")
-            }
+        }
+    } else {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No map selected")
         }
     }
 }
