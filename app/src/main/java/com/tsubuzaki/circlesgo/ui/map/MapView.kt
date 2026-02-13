@@ -18,7 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
@@ -235,14 +237,6 @@ fun MapView(
                         canvasHeight = canvasHeight,
                         popoverData = popoverData
                     )
-
-                    // Layer 5: Highlight layer
-                    MapHighlightLayer(
-                        highlightData = highlightData,
-                        canvasWidth = canvasWidth,
-                        canvasHeight = canvasHeight,
-                        mapper = mapper
-                    )
                 }
             }
         }
@@ -251,7 +245,7 @@ fun MapView(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text("No map selected")
+            Text(stringResource(R.string.no_map_selected))
         }
     }
 }

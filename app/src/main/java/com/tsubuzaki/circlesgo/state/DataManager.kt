@@ -7,6 +7,7 @@ import com.tsubuzaki.circlesgo.api.catalog.FavoritesAPI
 import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.CatalogDatabaseDownloader
+import com.tsubuzaki.circlesgo.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.content.edit
@@ -121,14 +122,14 @@ class DataManager(
 
         if (!database.isDownloaded(activeEvent)) {
             // Download text database
-            oasis.setHeaderText("Downloading")
-            oasis.setBodyText("Downloading text database...")
+            oasis.setHeaderText(context.getString(R.string.downloading))
+            oasis.setBodyText(context.getString(R.string.downloading_text_database))
             downloader.downloadTextDatabase(activeEvent, authToken) { progress ->
                 oasis.setProgress(progress)
             }
 
             // Download image database
-            oasis.setBodyText("Downloading image database...")
+            oasis.setBodyText(context.getString(R.string.downloading_image_database))
             downloader.downloadImageDatabase(activeEvent, authToken) { progress ->
                 oasis.setProgress(progress)
             }
@@ -137,14 +138,14 @@ class DataManager(
         }
 
         if (oasis.isShowing.value) {
-            oasis.setBodyText("Loading database...")
+            oasis.setBodyText(context.getString(R.string.loading_database))
         }
 
         // Reload selections from database
         selections.reloadData(database)
 
         if (oasis.isShowing.value) {
-            oasis.setHeaderText("Loading")
+            oasis.setHeaderText(context.getString(R.string.loading))
         }
 
         // Load images

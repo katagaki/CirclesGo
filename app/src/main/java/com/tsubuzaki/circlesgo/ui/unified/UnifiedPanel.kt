@@ -11,6 +11,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.FavoritesState
@@ -64,12 +66,12 @@ fun UnifiedPanel(
                 Tab(
                     selected = currentPath == UnifiedPath.CIRCLES,
                     onClick = { unifier.setCurrentPath(UnifiedPath.CIRCLES) },
-                    text = { Text("Circles") },
+                    text = { Text(stringResource(R.string.tab_circles)) },
                 )
                 Tab(
                     selected = currentPath == UnifiedPath.FAVORITES,
                     onClick = { unifier.setCurrentPath(UnifiedPath.FAVORITES) },
-                    text = { Text("Favorites") },
+                    text = { Text(stringResource(R.string.tab_favorites)) },
                 )
             }
 

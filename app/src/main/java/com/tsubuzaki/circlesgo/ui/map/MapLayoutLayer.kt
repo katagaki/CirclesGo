@@ -1,6 +1,7 @@
 package com.tsubuzaki.circlesgo.ui.map
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.isSystemInDarkTheme
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,8 @@ fun MapLayoutLayer(
     canvasHeight: Dp,
     popoverData: PopoverData?
 ) {
+    val highlightColor = (if (isSystemInDarkTheme()) Color.White else Color.Black)
+
     Box(
         modifier = Modifier
             .width(canvasWidth)
@@ -37,7 +40,7 @@ fun MapLayoutLayer(
             popoverData?.let { data ->
                 val rect = data.sourceRect
                 drawRect(
-                    color = Color.Black.copy(alpha = 0.3f),
+                    color = highlightColor.copy(alpha = 0.3f),
                     topLeft = Offset(rect.left.dp.toPx(), rect.top.dp.toPx()),
                     size = Size(rect.width().dp.toPx(), rect.height().dp.toPx())
                 )

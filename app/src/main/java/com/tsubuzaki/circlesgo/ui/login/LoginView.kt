@@ -31,9 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.tsubuzaki.circlesgo.R
 
 @Composable
 fun LoginView(
@@ -61,20 +63,20 @@ fun LoginView(
 
         LoginFeatureHero(
             icon = Icons.Filled.Map,
-            title = "Interactive Maps",
-            description = "Browse circle locations on interactive hall maps with real-time positions."
+            title = stringResource(R.string.login_hero_map_title),
+            description = stringResource(R.string.login_hero_map_description)
         )
         Spacer(modifier = Modifier.height(24.dp))
         LoginFeatureHero(
             icon = Icons.AutoMirrored.Filled.MenuBook,
-            title = "Circle Catalog",
-            description = "Search and browse the full circle catalog with grid and list views."
+            title = stringResource(R.string.login_hero_catalog_title),
+            description = stringResource(R.string.login_hero_catalog_description)
         )
         Spacer(modifier = Modifier.height(24.dp))
         LoginFeatureHero(
             icon = Icons.Filled.Favorite,
-            title = "Favorites",
-            description = "Manage your favorite circles with color-coded organization."
+            title = stringResource(R.string.login_hero_favorites_title),
+            description = stringResource(R.string.login_hero_favorites_description)
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -82,7 +84,7 @@ fun LoginView(
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text(
-            text = "Sign in with your Circle.ms account to access the web catalog and sync your favorites.",
+            text = stringResource(R.string.login_sign_in_prompt),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth()
@@ -109,7 +111,7 @@ fun LoginView(
             shape = RoundedCornerShape(26.dp)
         ) {
             Text(
-                text = "Sign In",
+                text = stringResource(R.string.login_sign_in),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )

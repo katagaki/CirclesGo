@@ -4,7 +4,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -13,8 +16,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.state.Unifier
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UnifiedMoreMenu(
     unifier: Unifier,
@@ -26,7 +32,7 @@ fun UnifiedMoreMenu(
     ) {
         Icon(
             imageVector = Icons.Default.MoreVert,
-            contentDescription = "More"
+            contentDescription = stringResource(R.string.more)
         )
     }
     DropdownMenu(
@@ -36,7 +42,7 @@ fun UnifiedMoreMenu(
         // Event Picker
         events.eventData?.list?.sortedByDescending { it.number }?.forEach { event ->
             DropdownMenuItem(
-                text = { Text("Comic Market ${event.number}") },
+                text = { Text(stringResource(R.string.comic_market_format, event.number)) },
                 onClick = {
                     expanded = false
                     events.setActiveEvent(event.number)
@@ -51,8 +57,9 @@ fun UnifiedMoreMenu(
                 } else null
             )
         }
+        HorizontalDivider()
         DropdownMenuItem(
-            text = { Text("Sign Out") },
+            text = { Text(stringResource(R.string.sign_out)) },
             onClick = {
                 expanded = false
                 unifier.setIsGoingToSignOut(true)

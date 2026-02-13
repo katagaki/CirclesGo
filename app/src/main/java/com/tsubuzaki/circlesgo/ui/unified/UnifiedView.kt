@@ -24,7 +24,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
@@ -75,19 +77,19 @@ fun UnifiedView(
         if (isGoingToSignOut) {
             AlertDialog(
                 onDismissRequest = { unifier.setIsGoingToSignOut(false) },
-                title = { Text("Sign Out") },
-                text = { Text("Are you sure you want to sign out? All downloaded data will be deleted.") },
+                title = { Text(stringResource(R.string.sign_out)) },
+                text = { Text(stringResource(R.string.sign_out_confirm_message)) },
                 confirmButton = {
                     TextButton(onClick = {
                         unifier.setIsGoingToSignOut(false)
                         onLogout()
                     }) {
-                        Text("Sign Out")
+                        Text(stringResource(R.string.sign_out))
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { unifier.setIsGoingToSignOut(false) }) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                 }
             )

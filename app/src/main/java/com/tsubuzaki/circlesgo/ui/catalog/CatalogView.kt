@@ -30,7 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.FavoritesState
@@ -132,7 +134,7 @@ fun CatalogView(
                 onSearch = { searchExpanded = false },
                 expanded = searchExpanded,
                 onExpandedChange = { searchExpanded = it },
-                placeholder = { Text("Search circles...") },
+                placeholder = { Text(stringResource(R.string.search_circles_placeholder)) },
                 leadingIcon = {
                     if (searchExpanded) {
                         IconButton(onClick = {
@@ -141,7 +143,7 @@ fun CatalogView(
                         }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Close search"
+                                contentDescription = stringResource(R.string.close_search)
                             )
                         }
                     } else {
@@ -151,7 +153,7 @@ fun CatalogView(
                 trailingIcon = {
                     if (searchTerm.isNotEmpty()) {
                         IconButton(onClick = { searchTerm = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear")
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.clear))
                         }
                     }
                 }
@@ -182,7 +184,7 @@ fun CatalogView(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Type at least 2 characters to search.",
+                    text = stringResource(R.string.search_min_characters),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -215,7 +217,7 @@ fun CatalogView(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Select a hall and filters\nto browse circles.",
+                            text = stringResource(R.string.no_filter_selected),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)

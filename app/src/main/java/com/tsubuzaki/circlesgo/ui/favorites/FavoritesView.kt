@@ -22,8 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.state.FavoritesState
@@ -74,7 +76,7 @@ fun FavoritesView(
                         .size(18.dp)
                 )
                 Text(
-                    text = "Group by Color",
+                    text = stringResource(R.string.group_by_color),
                     fontSize = 13.sp
                 )
             }
@@ -93,7 +95,7 @@ fun FavoritesView(
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     } else {
                         Text(
-                            text = "No favorites loaded.\nSign in and sync to view favorites.",
+                            text = stringResource(R.string.no_favorites_loaded),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(16.dp)
@@ -106,7 +108,7 @@ fun FavoritesView(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No favorites yet.\nAdd favorites from the web catalog.",
+                        text = stringResource(R.string.no_favorites_yet),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)

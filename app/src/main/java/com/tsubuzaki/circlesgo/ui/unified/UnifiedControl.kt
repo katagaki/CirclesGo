@@ -23,8 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketDate
 import com.tsubuzaki.circlesgo.database.tables.ComiketMap
@@ -73,7 +75,7 @@ private fun DatePickerButton(
         Column {
             selectedDate?.let { date ->
                 Text(
-                    text = "Day ${date.id}",
+                    text = stringResource(R.string.day_format, date.id),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -82,7 +84,7 @@ private fun DatePickerButton(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } ?: Text("No day")
+            } ?: Text(stringResource(R.string.no_day))
         }
     }
 
@@ -91,7 +93,7 @@ private fun DatePickerButton(
             DropdownMenuItem(
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Day ${date.id}")
+                        Text(stringResource(R.string.day_format, date.id))
                         if (date == selectedDate) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("✓", fontSize = 12.sp)
@@ -129,7 +131,7 @@ private fun HallPickerButton(
             modifier = Modifier.padding(horizontal = 4.dp)
         ) {
             Text(
-                text = selectedMap?.name ?: "No hall",
+                text = selectedMap?.name ?: stringResource(R.string.no_hall),
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp

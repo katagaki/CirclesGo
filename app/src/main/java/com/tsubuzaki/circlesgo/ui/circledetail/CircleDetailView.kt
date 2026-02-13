@@ -39,10 +39,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.DataFetcher
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
@@ -94,7 +96,7 @@ fun CircleDetailView(
             }) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back"
+                    contentDescription = stringResource(R.string.back)
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -147,7 +149,7 @@ fun CircleDetailView(
                 // Day and space pills
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     CircleBlockPill(
-                        text = "Day ${circle.day}",
+                        text = stringResource(R.string.day_format, circle.day),
                         size = CircleBlockPillSize.LARGE
                     )
                     circle.spaceName()?.let { spaceName ->
@@ -161,13 +163,13 @@ fun CircleDetailView(
                 // Description
                 if (circle.supplementaryDescription.trim().isNotEmpty()) {
                     InfoSection(
-                        title = "Description",
+                        title = stringResource(R.string.description_label),
                         content = circle.supplementaryDescription
                     )
                 } else {
                     InfoSection(
-                        title = "Description",
-                        content = "No description available."
+                        title = stringResource(R.string.description_label),
+                        content = stringResource(R.string.no_description)
                     )
                 }
             }
@@ -178,7 +180,7 @@ fun CircleDetailView(
         // Book name section
         if (circle.bookName.trim().isNotEmpty()) {
             InfoSection(
-                title = "Book Name",
+                title = stringResource(R.string.book_name),
                 content = circle.bookName,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
@@ -188,7 +190,7 @@ fun CircleDetailView(
         // Genre section
         genre?.let {
             InfoSection(
-                title = "Genre",
+                title = stringResource(R.string.genre_label),
                 content = it,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
@@ -198,7 +200,7 @@ fun CircleDetailView(
         // Memo section
         if (circle.memo.trim().isNotEmpty()) {
             InfoSection(
-                title = "Circle Memo",
+                title = stringResource(R.string.circle_memo),
                 content = circle.memo,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
             )
@@ -210,7 +212,7 @@ fun CircleDetailView(
         // SNS links
         if (extInfo != null && extInfo.hasAccessibleURLs()) {
             Text(
-                text = "Links",
+                text = stringResource(R.string.links),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
@@ -223,7 +225,7 @@ fun CircleDetailView(
             ) {
                 extInfo.twitterURL?.let { url ->
                     SNSLinkButton(
-                        label = "X/Twitter",
+                        label = stringResource(R.string.sns_twitter),
                         color = Color(0xFF1DA1F2),
                         onClick = {
                             val colorSchemeParams = CustomTabColorSchemeParams.Builder()
@@ -238,7 +240,7 @@ fun CircleDetailView(
                 }
                 extInfo.pixivURL?.let { url ->
                     SNSLinkButton(
-                        label = "Pixiv",
+                        label = stringResource(R.string.sns_pixiv),
                         color = Color(0xFF0096FA),
                         onClick = {
                             val colorSchemeParams = CustomTabColorSchemeParams.Builder()
@@ -253,7 +255,7 @@ fun CircleDetailView(
                 }
                 extInfo.circleMsPortalURL?.let { url ->
                     SNSLinkButton(
-                        label = "Circle.ms",
+                        label = stringResource(R.string.sns_circlems),
                         color = Color(0xFF4CAF50),
                         onClick = {
                             val colorSchemeParams = CustomTabColorSchemeParams.Builder()

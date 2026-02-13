@@ -23,8 +23,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketBlock
 import com.tsubuzaki.circlesgo.database.tables.ComiketGenre
@@ -140,8 +142,8 @@ private fun GenreFilterMenu(
             Text(
                 text = when {
                     selectedGenres.size == 1 -> selectedGenres.first().name
-                    selectedGenres.size > 1 -> "Genres (${selectedGenres.size})"
-                    else -> "Genre"
+                    selectedGenres.size > 1 -> stringResource(R.string.genres_count_format, selectedGenres.size)
+                    else -> stringResource(R.string.genre_filter)
                 },
                 fontSize = 13.sp
             )
@@ -149,7 +151,7 @@ private fun GenreFilterMenu(
 
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("All") },
+                text = { Text(stringResource(R.string.all_filter)) },
                 onClick = {
                     onClearAll()
                 }
@@ -191,8 +193,8 @@ private fun BlockFilterMenu(
             Text(
                 text = when {
                     selectedBlocks.size == 1 -> selectedBlocks.first().name
-                    selectedBlocks.size > 1 -> "Blocks (${selectedBlocks.size})"
-                    else -> "Block"
+                    selectedBlocks.size > 1 -> stringResource(R.string.blocks_count_format, selectedBlocks.size)
+                    else -> stringResource(R.string.block_filter)
                 },
                 fontSize = 13.sp
             )
@@ -200,7 +202,7 @@ private fun BlockFilterMenu(
 
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("All") },
+                text = { Text(stringResource(R.string.all_filter)) },
                 onClick = {
                     onClearAll()
                 }
