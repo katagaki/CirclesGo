@@ -1,6 +1,7 @@
 package com.tsubuzaki.circlesgo.ui.map
 
 import android.graphics.Bitmap
+import android.graphics.RectF
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -161,7 +162,36 @@ fun MapView(
                 zoomScale = zoomScale,
                 onZoomChange = { zoomScale = it },
                 scrollToPosition = scrollToPosition,
-                onScrollCompleted = { mapper.clearScrollToPosition() }
+                onScrollCompleted = { mapper.clearScrollToPosition() },
+                popoverContent = { offset, currentZoom ->
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    popoverData?.let { data ->
+                        // Project source rect from map coordinates to screen coordinates
+                        // sourceRect is in Dp (from MapGestureLayer).
+                        // offset is in Pixels.
+                        // We need the result in Dp for MapPopoverLayer.
+                        val dx = with(density) { offset.x.toDp().value }
+                        val dy = with(density) { offset.y.toDp().value }
+
+                        val originalRect = data.sourceRect
+                        val projectedRect = RectF(
+                            originalRect.left * currentZoom + dx,
+                            originalRect.top * currentZoom + dy,
+                            originalRect.right * currentZoom + dx,
+                            originalRect.bottom * currentZoom + dy
+                        )
+
+                        MapPopoverLayer(
+                            popoverData = data.copy(sourceRect = projectedRect),
+                            zoomScale = 1.0f, // Use 1.0 scale to prevent scaling
+                            canvasWidth = canvasWidth,
+                            canvasHeight = canvasHeight,
+                            mapper = mapper,
+                            database = database,
+                            onCircleTapped = onCircleTapped
+                        )
+                    }
+                }
             ) {
                 Box {
                     // Layer 1: Base map image
@@ -206,19 +236,6 @@ fun MapView(
                         canvasHeight = canvasHeight,
                         mapper = mapper
                     )
-
-                    // Layer 6: Popover layer
-                    popoverData?.let { data ->
-                        MapPopoverLayer(
-                            popoverData = data,
-                            zoomScale = zoomScale,
-                            canvasWidth = canvasWidth,
-                            canvasHeight = canvasHeight,
-                            mapper = mapper,
-                            database = database,
-                            onCircleTapped = onCircleTapped
-                        )
-                    }
                 }
             }
         }

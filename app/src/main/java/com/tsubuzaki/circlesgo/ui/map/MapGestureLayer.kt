@@ -39,6 +39,7 @@ fun MapGestureLayer(
     onZoomChange: (Float) -> Unit,
     scrollToPosition: PointF?,
     onScrollCompleted: () -> Unit,
+    popoverContent: @Composable (Offset, Float) -> Unit = { _, _ -> },
     content: @Composable () -> Unit
 ) {
     var currentZoom by remember { mutableFloatStateOf(zoomScale) }
@@ -145,4 +146,6 @@ fun MapGestureLayer(
             content()
         }
     }
+
+    popoverContent(offset, currentZoom)
 }
