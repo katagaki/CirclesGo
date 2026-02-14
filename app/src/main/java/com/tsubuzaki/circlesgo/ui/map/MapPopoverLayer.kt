@@ -92,7 +92,7 @@ fun MapPopoverLayer(
                 .offset {
                     IntOffset(
                         (position.x - mapper.popoverWidth / 2).dp.roundToPx(),
-                        (position.y).dp.roundToPx()
+                        (position.y - mapper.popoverHeight / 2).dp.roundToPx()
                     )
                 }
                 .width(mapper.popoverWidth.dp)
