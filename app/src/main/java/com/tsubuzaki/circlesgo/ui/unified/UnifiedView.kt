@@ -64,6 +64,7 @@ fun UnifiedView(
 ) {
     val isGoingToSignOut by unifier.isGoingToSignOut.collectAsState()
     val isSearchActive by unifier.isSearchActive.collectAsState()
+    val showGenreOverlay by selections.showGenreOverlay.collectAsState()
     val scope = rememberCoroutineScope()
 
     val bottomSheetState = rememberStandardBottomSheetState(
@@ -144,6 +145,7 @@ fun UnifiedView(
                     mapper = mapper,
                     selections = selections,
                     favorites = favorites,
+                    showGenreOverlay = showGenreOverlay,
                     onCircleTapped = { circle ->
                         unifier.showCircleDetail(circle)
                     }
@@ -192,7 +194,8 @@ fun UnifiedView(
                     )
                     UnifiedMoreMenu(
                         unifier = unifier,
-                        events = events
+                        events = events,
+                        selections = selections
                     )
                 }
             )
