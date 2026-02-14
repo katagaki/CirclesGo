@@ -24,9 +24,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedButton
@@ -166,13 +166,13 @@ fun CircleDetailView(
                             existingFavorite.favorite.webCatalogColor()?.backgroundColor()
                                 ?: MaterialTheme.colorScheme.primary
                         Icon(
-                            imageVector = Icons.Filled.Favorite,
+                            imageVector = Icons.Filled.Star,
                             contentDescription = stringResource(R.string.edit_favorite),
                             tint = favoriteColor
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Filled.FavoriteBorder,
+                            imageVector = Icons.Filled.StarBorder,
                             contentDescription = stringResource(R.string.add_to_favorites),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -278,6 +278,7 @@ fun CircleDetailView(
                                 }
                             },
                             enabled = !isSaving,
+                            modifier = Modifier.height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             )

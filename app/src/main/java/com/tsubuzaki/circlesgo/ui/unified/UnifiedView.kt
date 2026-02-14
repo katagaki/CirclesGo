@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.R
+import com.tsubuzaki.circlesgo.api.catalog.FavoritesAPI
+import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.state.CatalogCache
 import com.tsubuzaki.circlesgo.state.Events
@@ -41,8 +43,6 @@ import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.Oasis
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
-import com.tsubuzaki.circlesgo.api.catalog.FavoritesAPI
-import com.tsubuzaki.circlesgo.auth.Authenticator
 import com.tsubuzaki.circlesgo.ui.map.MapView
 import com.tsubuzaki.circlesgo.ui.shared.ProgressOverlay
 import kotlinx.coroutines.launch

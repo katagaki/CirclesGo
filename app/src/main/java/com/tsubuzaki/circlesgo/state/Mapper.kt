@@ -28,7 +28,7 @@ class Mapper {
     val popoverWidth: Float = 240f
     val popoverHeight: Float = (16f * 2) + (65f * 2) + 8f
     val popoverDistance: Float = 8f
-    val popoverEdgePadding: Float = 16f
+    val popoverEdgePadding: Float = 8f
 
     private val _popoverData = MutableStateFlow<PopoverData?>(null)
     val popoverData: StateFlow<PopoverData?> = _popoverData
