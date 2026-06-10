@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -82,7 +83,6 @@ fun EventDataView(
     var storageStats by remember { mutableStateOf<StorageStats?>(null) }
     var eventRows by remember { mutableStateOf<List<EventDataRow>>(emptyList()) }
     var activeDownloads by remember { mutableStateOf<Map<Int, Double?>>(emptyMap()) }
-    var estimatingEvents by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var pendingSwitchEvent by remember { mutableStateOf<Int?>(null) }
     var pendingDownload by remember { mutableStateOf<PendingDownload?>(null) }
 
@@ -112,30 +112,39 @@ fun EventDataView(
     fun requestDownload(row: EventDataRow) {
         val event = row.event ?: return
         val token = authToken ?: return
-        if (activeDownloads.containsKey(event.number) ||
-            estimatingEvents.contains(event.number)
-        ) {
-            return
-        }
-        estimatingEvents = estimatingEvents + event.number
+        if (activeDownloads.containsKey(event.number)) return
+
+        // Show the confirmation immediately, then resolve the expected size
+        // asynchronously so the dialog always appears, even offline or while
+        // the size lookup is still in flight.
+        pendingDownload = PendingDownload(
+            event = event,
+            info = null,
+            sizeBytes = null,
+            isEstimating = true
+        )
         scope.launch {
             val info = downloader.fetchDatabaseInformation(event, token)
-            if (info == null) {
-                estimatingEvents = estimatingEvents - event.number
-                return@launch
+            val size = info?.let { downloader.estimateDownloadSize(it) }
+            // Only apply if the user is still looking at this event's dialog
+            if (pendingDownload?.event?.number == event.number) {
+                pendingDownload = PendingDownload(
+                    event = event,
+                    info = info,
+                    sizeBytes = size,
+                    isEstimating = false
+                )
             }
-            val size = downloader.estimateDownloadSize(info)
-            estimatingEvents = estimatingEvents - event.number
-            pendingDownload = PendingDownload(event, info, size)
         }
     }
 
     fun startDownload(pending: PendingDownload) {
         val token = authToken ?: return
+        val info = pending.info ?: return
         if (activeDownloads.containsKey(pending.event.number)) return
         activeDownloads = activeDownloads + (pending.event.number to 0.0)
         scope.launch {
-            downloader.downloadEventData(pending.event, pending.info, token) { progress ->
+            downloader.downloadEventData(pending.event, info, token) { progress ->
                 withContext(Dispatchers.Main) {
                     activeDownloads = activeDownloads + (pending.event.number to progress)
                 }
@@ -201,7 +210,6 @@ fun EventDataView(
                         row = activeRow,
                         isActive = true,
                         downloadProgress = null,
-                        isEstimating = false,
                         onTap = {},
                         onDelete = { deleteEventData(activeRow) }
                     )
@@ -221,12 +229,11 @@ fun EventDataView(
                         row = row,
                         isActive = false,
                         downloadProgress = activeDownloads[row.number],
-                        isEstimating = estimatingEvents.contains(row.number),
                         onTap = {
                             if (activeDownloads.containsKey(row.number)) return@EventRow
                             if (row.isDownloaded) {
                                 pendingSwitchEvent = row.number
-                            } else if (onlineState == OnlineState.ONLINE) {
+                            } else {
                                 requestDownload(row)
                             }
                         },
@@ -272,27 +279,52 @@ fun EventDataView(
             onDismissRequest = { pendingDownload = null },
             title = { Text(stringResource(R.string.download_event_title)) },
             text = {
-                val sizeBytes = pending.sizeBytes
-                Text(
-                    if (sizeBytes != null) {
-                        stringResource(
-                            R.string.download_event_message,
-                            pending.event.number,
-                            Formatter.formatFileSize(context, sizeBytes)
-                        )
-                    } else {
-                        stringResource(
-                            R.string.download_event_message_unknown_size,
-                            pending.event.number
+                when {
+                    pending.isEstimating -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Text(stringResource(R.string.download_event_estimating))
+                        }
+                    }
+
+                    pending.info == null -> {
+                        Text(stringResource(R.string.download_event_info_failed))
+                    }
+
+                    pending.sizeBytes != null -> {
+                        Text(
+                            stringResource(
+                                R.string.download_event_message,
+                                pending.event.number,
+                                Formatter.formatFileSize(context, pending.sizeBytes)
+                            )
                         )
                     }
-                )
+
+                    else -> {
+                        Text(
+                            stringResource(
+                                R.string.download_event_message_unknown_size,
+                                pending.event.number
+                            )
+                        )
+                    }
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    pendingDownload = null
-                    startDownload(pending)
-                }) {
+                TextButton(
+                    onClick = {
+                        pendingDownload = null
+                        startDownload(pending)
+                    },
+                    enabled = !pending.isEstimating && pending.info != null
+                ) {
                     Text(stringResource(R.string.download_action))
                 }
             },
@@ -330,7 +362,6 @@ private fun EventRow(
     row: EventDataRow,
     isActive: Boolean,
     downloadProgress: Double?,
-    isEstimating: Boolean,
     onTap: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -341,7 +372,8 @@ private fun EventRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isActive) Modifier else Modifier.clickable(onClick = onTap))
-            .padding(horizontal = 20.dp, vertical = 4.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -366,7 +398,7 @@ private fun EventRow(
             )
         }
         when {
-            isDownloading || isEstimating -> {
+            isDownloading -> {
                 val progress = downloadProgress
                 if (progress != null) {
                     CircularProgressIndicator(
@@ -525,8 +557,9 @@ private data class EventDataRow(
 
 private data class PendingDownload(
     val event: WebCatalogEvent.Response.Event,
-    val info: WebCatalogDatabase,
-    val sizeBytes: Long?
+    val info: WebCatalogDatabase?,
+    val sizeBytes: Long?,
+    val isEstimating: Boolean
 )
 
 private fun collectStorageStats(

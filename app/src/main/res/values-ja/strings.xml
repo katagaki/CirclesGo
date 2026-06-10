@@ -90,6 +90,8 @@
     <string name="download_event_title">イベントデータをダウンロードしますか？</string>
     <string name="download_event_message">「コミックマーケット%1$d」のデータ（約%2$s）をダウンロードします。</string>
     <string name="download_event_message_unknown_size">「コミックマーケット%1$d」のデータをダウンロードします。データサイズを取得できませんでした。</string>
+    <string name="download_event_estimating">ダウンロードサイズを確認中…</string>
+    <string name="download_event_info_failed">イベントデータの情報を取得できませんでした。通信環境を確認して、もう一度お試しください。</string>
     <string name="download_action">ダウンロード</string>
 
     <!-- Toolbar Filters -->
