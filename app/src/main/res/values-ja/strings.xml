@@ -19,6 +19,8 @@
     <string name="clear">クリア</string>
     <string name="search_min_characters">2文字以上入力して検索してください。</string>
     <string name="no_filter_selected">サークルを閲覧するには、ジャンルまたは棟を選択してください。</string>
+    <string name="no_circles_found">サークルが見つかりませんでした。</string>
+    <string name="no_circles_found_filters">サークルが見つかりませんでした。\nフィルターを調整してみてください。</string>
 
     <!-- Circle Detail -->
     <string name="back">戻る</string>

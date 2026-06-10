@@ -19,6 +19,8 @@
     <string name="clear">Clear</string>
     <string name="search_min_characters">Type at least 2 characters to search.</string>
     <string name="no_filter_selected">Select a hall and filters\nto browse circles.</string>
+    <string name="no_circles_found">No circles found.</string>
+    <string name="no_circles_found_filters">No circles found.\nTry adjusting filters.</string>
 
     <!-- Circle Detail -->
     <string name="back">Back</string>
