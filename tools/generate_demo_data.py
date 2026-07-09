@@ -51,10 +51,12 @@ AISLE_Y = 44     # gap between island rows vertically
 LABEL_H = 26     # label strip above each island
 
 # ---- Demo content ----------------------------------------------------------
-SCHOOLS = [
-    "アビドス高等学校", "ゲヘナ学園", "トリニティ総合学園",
-    "ミレニアムサイエンススクール", "百鬼夜行連合学院", "レッドウィンター連邦学園",
-    "山海経高級中学校", "ヴァルキューレ警察学校", "SRT特殊学園",
+STUDENTS = [
+    "シロコ", "ホシノ", "アズサ", "ヒフミ", "ハナコ", "ヒナ", "イオリ", "アコ",
+    "ノノミ", "マリー", "ノア", "モモイ", "ミドリ", "コハル", "シュン", "チヒロ",
+    "サオリ", "ユウカ", "アスナ", "ミカ", "ヒマリ", "カリン", "ハルナ", "セリカ",
+    "アヤネ", "アカリ", "スモモ", "カヨコ", "ムツキ", "ハスミ", "コトリ", "アル",
+    "カズサ", "ケイ", "ネル", "トキ", "ハルカ", "イズナ", "ミチル", "ツバキ",
 ]
 
 HALLS = [("E123", "東123"), ("E456", "東456"), ("W12", "西12")]
@@ -123,7 +125,7 @@ def build_layouts():
             for ic in range(ISLANDS_PER_ROW):
                 block_id += 1
                 label = BLOCK_LABELS[(block_id - 1) % len(BLOCK_LABELS)]
-                school_idx = (block_id - 1) % len(SCHOOLS)
+                student_idx = (block_id - 1) % len(STUDENTS)
                 ix = MARGIN + ic * (island_w + AISLE_X)
                 iy = MARGIN + TITLE_H + ir * (LABEL_H + island_h + AISLE_Y) + LABEL_H
                 spaces = []
@@ -135,7 +137,7 @@ def build_layouts():
                         spaces.append((space_no, x, y))
                         layout_rows.append(dict(blockId=block_id, spaceNo=space_no,
                                                 xpos2=x, ypos2=y, mapId=map_id, hallId=map_id))
-                blocks.append(dict(id=block_id, label=label, school=school_idx,
+                blocks.append(dict(id=block_id, label=label, student=student_idx,
                                    label_x=ix, label_y=iy - LABEL_H, spaces=spaces))
         w2 = MARGIN + ISLANDS_PER_ROW * island_w + (ISLANDS_PER_ROW - 1) * AISLE_X + MARGIN
         h2 = MARGIN + TITLE_H + ISLAND_ROWS * (LABEL_H + island_h) + (ISLAND_ROWS - 1) * AISLE_Y + MARGIN
@@ -281,7 +283,7 @@ def generate_dataset(event_no, seed):
     circle_id = 0
     wc_id = event_no * 100000
     for (map_id, b) in all_blocks:
-        school = SCHOOLS[b["school"]]
+        student = STUDENTS[b["student"]]
         for (space_no, x, y) in b["spaces"]:
             for (did, *_rest) in DAYS:
                 for sub in range(CIRC_PER_SPACE_DAY):
@@ -290,13 +292,13 @@ def generate_dataset(event_no, seed):
                     name = "デモ用サークル%04d" % circle_id
                     kana = "でもようさーくる%04d" % circle_id
                     gid = genre_by[(b["id"], did)]
-                    book = rng.choice(BOOK_TEMPLATES) % school
+                    book = rng.choice(BOOK_TEMPLATES) % student
                     desc = "このサークルは、サークル番号%04dです。" % circle_id
                     tdb.execute(
                         "INSERT INTO ComiketCircleWC VALUES "
                         "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (event_no, circle_id, circle_id, 0, did, b["id"], space_no, sub, gid,
-                         name, kana, school, book, "", "", desc,
+                         name, kana, student, book, "", "", desc,
                          "", 0, "", "", "", 0))
                     tdb.execute("INSERT INTO ComiketCircleExtend VALUES (?,?,?,?,?,?)",
                                 (event_no, circle_id, wc_id, "", "", ""))
