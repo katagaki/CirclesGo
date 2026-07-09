@@ -142,6 +142,15 @@ def build_layouts():
         hall_geo[filename] = dict(w2=w2, h2=h2, disp=disp, blocks=blocks)
     return hall_geo, layout_rows
 
+NUM_FONT = load_font(19)
+
+def draw_space_number(d, space_no, x, y, fill, stroke_fill):
+    txt = str(space_no)
+    bbox = d.textbbox((0, 0), txt, font=NUM_FONT, stroke_width=1)
+    tx = x + (SQ - (bbox[2] - bbox[0])) / 2 - bbox[0]
+    ty = y + (SQ - (bbox[3] - bbox[1])) / 2 - bbox[1]
+    d.text((tx, ty), txt, font=NUM_FONT, fill=fill, stroke_width=1, stroke_fill=stroke_fill)
+
 def draw_base_map(geo):
     w2, h2, blocks = geo["w2"], geo["h2"], geo["blocks"]
     img = Image.new("RGB", (w2, h2), (255, 255, 255))
@@ -154,6 +163,7 @@ def draw_base_map(geo):
         d.text((b["label_x"], b["label_y"]), b["label"], fill=(0, 0, 0), font=label_font)
         for (space_no, x, y) in b["spaces"]:
             d.rectangle([x, y, x + SQ, y + SQ], fill=(255, 255, 255), outline=(0, 0, 0), width=1)
+            draw_space_number(d, space_no, x, y, (0, 0, 0), (0, 0, 0))
     return img
 
 def draw_genre_map(geo, day, genre_by):
