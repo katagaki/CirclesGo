@@ -137,7 +137,7 @@ def build_layouts():
                         spaces.append((space_no, x, y))
                         layout_rows.append(dict(blockId=block_id, spaceNo=space_no,
                                                 xpos2=x, ypos2=y, mapId=map_id, hallId=map_id))
-                blocks.append(dict(id=block_id, label=label, student=student_idx,
+                blocks.append(dict(id=block_id, label=label, student=student_idx, ic=ic, ir=ir,
                                    label_x=ix, label_y=iy - LABEL_H, spaces=spaces))
         w2 = MARGIN + ISLANDS_PER_ROW * island_w + (ISLANDS_PER_ROW - 1) * AISLE_X + MARGIN
         h2 = MARGIN + TITLE_H + ISLAND_ROWS * (LABEL_H + island_h) + (ISLAND_ROWS - 1) * AISLE_Y + MARGIN
@@ -172,10 +172,31 @@ def draw_genre_map(geo, day, genre_by):
     w2, h2, blocks = geo["w2"], geo["h2"], geo["blocks"]
     img = Image.new("RGBA", (w2, h2), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
+    island_w = COLS * SQ
+    island_h = ROWS_PER_ISLAND * SQ
+    pitch_x = island_w + AISLE_X
+    pitch_y = LABEL_H + island_h + AISLE_Y
+    content_top = MARGIN + TITLE_H
+    last_ic = ISLANDS_PER_ROW - 1
+    last_ir = ISLAND_ROWS - 1
+    # Fill each block's whole cell (booths + surrounding aisles up to the
+    # midpoints / map edges) so genres read as solid areas, not boxed booths.
     for b in blocks:
+        ic, ir = b["ic"], b["ir"]
+        x_left = 0 if ic == 0 else MARGIN + (ic - 1) * pitch_x + island_w + AISLE_X // 2
+        x_right = w2 if ic == last_ic else MARGIN + ic * pitch_x + island_w + AISLE_X // 2
+        y_top = content_top if ir == 0 \
+            else content_top + (ir - 1) * pitch_y + LABEL_H + island_h + AISLE_Y // 2
+        y_bottom = h2 if ir == last_ir \
+            else content_top + ir * pitch_y + LABEL_H + island_h + AISLE_Y // 2
         color = GENRE_COLORS[genre_by[(b["id"], day)] - 1] + (255,)
+        d.rectangle([x_left, y_top, x_right, y_bottom], fill=color)
+    # booth outlines + block labels stay visible over the fill
+    label_font = load_font(18)
+    for b in blocks:
+        d.text((b["label_x"], b["label_y"]), b["label"], fill=(30, 30, 30, 255), font=label_font)
         for (space_no, x, y) in b["spaces"]:
-            d.rectangle([x, y, x + SQ, y + SQ], fill=color, outline=(255, 255, 255, 120), width=1)
+            d.rectangle([x, y, x + SQ, y + SQ], outline=(255, 255, 255, 110), width=1)
     return img
 
 # ---- Database creation -----------------------------------------------------
