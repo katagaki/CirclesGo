@@ -189,14 +189,8 @@ def draw_genre_map(geo, day, genre_by):
             else content_top + (ir - 1) * pitch_y + LABEL_H + island_h + AISLE_Y // 2
         y_bottom = h2 if ir == last_ir \
             else content_top + ir * pitch_y + LABEL_H + island_h + AISLE_Y // 2
-        color = GENRE_COLORS[genre_by[(b["id"], day)] - 1] + (255,)
+        color = GENRE_COLORS[genre_by[(b["id"], day)] - 1] + (51,)  # 20% opacity
         d.rectangle([x_left, y_top, x_right, y_bottom], fill=color)
-    # booth outlines + block labels stay visible over the fill
-    label_font = load_font(18)
-    for b in blocks:
-        d.text((b["label_x"], b["label_y"]), b["label"], fill=(30, 30, 30, 255), font=label_font)
-        for (space_no, x, y) in b["spaces"]:
-            d.rectangle([x, y, x + SQ, y + SQ], outline=(255, 255, 255, 110), width=1)
     return img
 
 # ---- Database creation -----------------------------------------------------
