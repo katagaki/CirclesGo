@@ -41,12 +41,15 @@ import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.state.VisitsState
 import com.tsubuzaki.circlesgo.ui.login.LoginView
 import com.tsubuzaki.circlesgo.ui.theme.CirclesGoTheme
+import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysSession
+import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuysDebugScreen
 import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private var authenticator: Authenticator? = null
+    private var sharedBuys: SharedBuysSession? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +90,8 @@ class MainActivity : ComponentActivity() {
             demoState = demoState
         )
 
+        sharedBuys = SharedBuysSession(this, lifecycleScope).also { it.restore() }
+
         handleDeepLink(intent)
 
         enableEdgeToEdge()
@@ -101,6 +106,11 @@ class MainActivity : ComponentActivity() {
                     LocalVisitsState provides visitsState,
                     LocalEvents provides events
                 ) {
+                    val buys = sharedBuys
+                    if (buys != null && buys.isDebugVisible) {
+                        SharedBuysDebugScreen(buys) { buys.isDebugVisible = false }
+                        return@CompositionLocalProvider
+                    }
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -254,6 +264,33 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDeepLink(intent: Intent) {
         intent.data?.let { uri ->
+            val session = sharedBuys
+            if (uri.scheme == "circles-app" && session != null) {
+                when (uri.host) {
+                    "buys-debug" -> {
+                        session.isDebugVisible = true
+                        return
+                    }
+                    "buys-join" -> {
+                        session.join(uri, "Tester")
+                        session.isDebugVisible = true
+                        return
+                    }
+                    "buys-add" -> {
+                        session.addItem(
+                            uri.getQueryParameter("name").orEmpty(),
+                            uri.getQueryParameter("cost")?.toIntOrNull() ?: 0,
+                            1
+                        )
+                        return
+                    }
+                    "buys-cycle" -> {
+                        val itemId = uri.getQueryParameter("item")
+                        session.items.firstOrNull { it.id == itemId }?.let { session.cycle(it) }
+                        return
+                    }
+                }
+            }
             if (uri.scheme == "circles-app") {
                 val gotCode = authenticator?.getAuthenticationCode(uri) ?: false
                 if (gotCode) {
