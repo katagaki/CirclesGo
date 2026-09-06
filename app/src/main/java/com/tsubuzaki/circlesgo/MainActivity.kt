@@ -267,11 +267,17 @@ class MainActivity : ComponentActivity() {
             val session = sharedBuys
             if (uri.scheme == "circles-app" && session != null) {
                 when (uri.host) {
+                    "buys-selftest" -> {
+                        session.runSelfTest()
+                        session.isDebugVisible = true
+                        return
+                    }
                     "buys-debug" -> {
                         session.isDebugVisible = true
                         return
                     }
                     "buys-join" -> {
+                        requestBluetoothPermissions(session)
                         session.join(uri, "Tester")
                         session.isDebugVisible = true
                         return
@@ -299,6 +305,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun requestBluetoothPermissions(session: SharedBuysSession) {
+        val missing = session.missingBluetoothPermissions()
+        if (missing.isNotEmpty()) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, missing.toTypedArray(), 4001)
         }
     }
 

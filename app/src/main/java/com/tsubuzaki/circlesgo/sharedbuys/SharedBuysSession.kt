@@ -7,13 +7,22 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import java.util.UUID
 
-class SharedBuysSession(context: Context, scope: CoroutineScope) {
+class SharedBuysSession(context: Context, private val scope: CoroutineScope) {
 
     private val store = SharedBuysStore(context)
     private val relay = SharedBuysRelay(scope)
+    private val bluetooth = SharedBuysBluetooth(context)
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     var status by mutableStateOf("idle")
@@ -21,6 +30,9 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
     var relayBaseUrl by mutableStateOf("ws://10.0.2.2:8787")
     var actorPid by mutableStateOf(0)
     var isDebugVisible by mutableStateOf(false)
+    var bluetoothPeers by mutableStateOf(0)
+        private set
+    var isBluetoothEnabled by mutableStateOf(true)
 
     val log = mutableStateListOf<String>()
     val changes = mutableStateListOf<SharedBuyChange>()
@@ -31,6 +43,8 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         private set
     private var eventNumber = 0
     private var lastSeq = 0L
+    private var reconnectAttempt = 0
+    private var reconnectJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
 
@@ -68,6 +82,7 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("started room $roomId as $deviceId")
         connect()
+        startBluetooth()
     }
 
     fun join(uri: Uri, nickname: String) {
@@ -83,9 +98,15 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("joined room $roomId as $deviceId")
         connect()
+        startBluetooth()
     }
 
     fun leave() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempt = 0
+        bluetooth.stop()
+        bluetoothPeers = 0
         relay.disconnect()
         sessionKey = null
         changes.clear()
@@ -98,10 +119,111 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
     fun connect() {
         val key = sessionKey ?: return
         val room = roomId ?: return
+        reconnectJob?.cancel()
+        reconnectJob = null
         status = "connecting"
         relay.connect(
             SharedBuysRelay.Endpoint(relayBaseUrl, room, deviceId, key, versionVector)
         ) { event -> handle(event) }
+    }
+
+    fun startBluetooth() {
+        if (!isBluetoothEnabled) return
+        val key = sessionKey ?: return
+        bluetooth.start(key, SharedBuysDigest.bytes(versionVector)) { event ->
+            when (event) {
+                is BluetoothEvent.PeerCount -> {
+                    bluetoothPeers = event.count
+                    note("bluetooth peers ${event.count}")
+                    if (event.count > 0) sendWant()
+                }
+                is BluetoothEvent.Payload -> handleBluetooth(event.bytes)
+                is BluetoothEvent.Unavailable -> note("bluetooth: ${event.reason}")
+            }
+        }
+    }
+
+    fun stopBluetooth() {
+        bluetooth.stop()
+        bluetoothPeers = 0
+    }
+
+    fun missingBluetoothPermissions(): List<String> = bluetooth.missingPermissions()
+
+    private fun sendWant() {
+        val frame = buildJsonObject {
+            put("t", "want")
+            put("v", buildJsonObject { versionVector.forEach { (device, seq) -> put(device, seq) } })
+        }
+        bluetooth.send(frame.toString().toByteArray())
+    }
+
+    private fun handleBluetooth(payload: ByteArray) {
+        val frame = runCatching {
+            Json.parseToJsonElement(String(payload)).jsonObject
+        }.getOrNull() ?: return
+        when (frame["t"]?.jsonPrimitive?.content) {
+            "want" -> {
+                val theirs = frame["v"]?.jsonObject.orEmpty()
+                val missing = changes.filter { change ->
+                    change.seq > (theirs[change.device]?.jsonPrimitive?.long ?: 0L)
+                }
+                sendOverBluetooth(missing)
+            }
+            "ops" -> {
+                val records = frame["o"]?.jsonArray?.mapNotNull { element ->
+                    val entry = element.jsonObject
+                    RelayRecord(
+                        entry["d"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                        entry["n"]?.jsonPrimitive?.long ?: return@mapNotNull null,
+                        entry["b"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                        entry["a"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                    )
+                }.orEmpty()
+                ingest(records)
+            }
+        }
+    }
+
+    private fun sendOverBluetooth(outgoing: List<SharedBuyChange>) {
+        if (outgoing.isEmpty() || bluetoothPeers == 0) return
+        val key = sessionKey ?: return
+        val room = roomId ?: return
+        val records = outgoing.mapNotNull { seal(it, key, room) }
+        if (records.isEmpty()) return
+        val frame = buildJsonObject {
+            put("t", "ops")
+            put("o", buildJsonArray {
+                records.forEach { record ->
+                    add(buildJsonObject {
+                        put("d", record.device)
+                        put("n", record.seq)
+                        put("b", record.blob)
+                        put("a", record.tag)
+                    })
+                }
+            })
+        }
+        bluetooth.send(frame.toString().toByteArray())
+    }
+
+    fun runSelfTest() {
+        val vector = mapOf("aaaaaaaa" to 3L, "bbbbbbbb" to 1L, "cafebabe" to 260L)
+        note("digest ${SharedBuysDigest.bytes(vector).toHex()}")
+
+        val payload = ByteArray(500) { (it % 251).toByte() }
+        val frames = SharedBuysFraming.chunks(payload, 7)
+        val reassembler = SharedBuysFraming.Reassembler()
+        var rebuilt: ByteArray? = null
+        for (frame in frames.shuffled()) {
+            reassembler.accept(frame)?.let { rebuilt = it }
+        }
+        val ok = rebuilt?.contentEquals(payload) == true
+        note("framing ${frames.size} chunks, round trip ${if (ok) "ok" else "FAILED"}")
+
+        sessionKey?.let {
+            note("ble tag ${SharedBuysProfile.sessionTag(it).toHex()} window ${SharedBuysProfile.window()}")
+        }
     }
 
     fun addItem(name: String, cost: Int, circleId: Int) {
@@ -126,6 +248,8 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         changes.add(change)
         persist()
         seal(change, key, room)?.let { relay.send(listOf(it)) { event -> handle(event) } }
+        sendOverBluetooth(listOf(change))
+        bluetooth.update(SharedBuysDigest.bytes(versionVector))
     }
 
     private fun seal(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
@@ -142,6 +266,7 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         when (event) {
             is RelayEvent.Connected -> {
                 status = "connected"
+                reconnectAttempt = 0
                 note("connected")
                 resend()
             }
@@ -149,7 +274,25 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
             is RelayEvent.Failed -> {
                 status = "offline (${event.reason})"
                 note("failed: ${event.reason}")
+                scheduleReconnect()
             }
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (!isActive || reconnectJob != null) return
+        if (bluetoothPeers > 0) {
+            note("holding off, bluetooth is carrying")
+            return
+        }
+        reconnectAttempt = minOf(reconnectAttempt + 1, 6)
+        val delayMs = (minOf(Math.pow(2.0, reconnectAttempt.toDouble()), 30.0) * 1000).toLong() +
+            (0..1000).random()
+        note("reconnect in ${delayMs / 1000.0}s")
+        reconnectJob = scope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            reconnectJob = null
+            if (isActive && bluetoothPeers == 0) connect()
         }
     }
 
@@ -184,6 +327,7 @@ class SharedBuysSession(context: Context, scope: CoroutineScope) {
         }
         if (added > 0) {
             persist()
+            bluetooth.update(SharedBuysDigest.bytes(versionVector))
             note("received $added")
         }
     }

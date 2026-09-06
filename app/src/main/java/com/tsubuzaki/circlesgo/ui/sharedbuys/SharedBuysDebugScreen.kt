@@ -47,6 +47,7 @@ fun SharedBuysDebugScreen(session: SharedBuysSession, onClose: () -> Unit) {
                 Text("Status: ${session.status}")
                 Text("Device: ${session.deviceId.ifEmpty { "—" }}")
                 Text("Room: ${session.roomId ?: "—"}", overflow = TextOverflow.Ellipsis)
+                Text("Bluetooth peers: ${session.bluetoothPeers}")
                 OutlinedTextField(
                     value = session.relayBaseUrl,
                     onValueChange = { session.relayBaseUrl = it },
