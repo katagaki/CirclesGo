@@ -47,6 +47,11 @@ import com.tsubuzaki.circlesgo.data.local.BuysCache
 import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.database.tables.ComiketCircle
 import com.tsubuzaki.circlesgo.state.Events
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
+import com.tsubuzaki.circlesgo.ui.shared.LocalSharedBuys
+import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuysList
+import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuysSheet
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +69,11 @@ fun BuysView(
     selections: UserSelections,
     unifier: Unifier
 ) {
+    val sharedBuys = LocalSharedBuys.current
+    var scope by remember { mutableStateOf(0) }
+    var hasChosenScope by remember { mutableStateOf(false) }
+    var isShowingSharedSheet by remember { mutableStateOf(false) }
+
     val buysVersion by buysCache.version.collectAsState()
     val selectedDate by selections.date.collectAsState()
     val eventNumber = events.activeEventNumber
@@ -97,6 +107,14 @@ fun BuysView(
     val totalCost = cost(visibleEntries)
     val grandTotalCost = cost(entries)
 
+    LaunchedEffect(sharedBuys?.isActive) {
+        if (sharedBuys?.isActive == true && !hasChosenScope) scope = 1
+    }
+
+    if (isShowingSharedSheet && sharedBuys != null) {
+        SharedBuysSheet(sharedBuys) { isShowingSharedSheet = false }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Info button row
         Row(
@@ -115,7 +133,33 @@ fun BuysView(
             Spacer(modifier = Modifier.weight(1f))
         }
 
-        if (visibleEntries.isEmpty()) {
+        if (sharedBuys != null) {
+            PrimaryTabRow(selectedTabIndex = scope) {
+                Tab(
+                    selected = scope == 0,
+                    onClick = { scope = 0; hasChosenScope = true },
+                    text = { Text(stringResource(R.string.buys_scope_mine)) }
+                )
+                Tab(
+                    selected = scope == 1,
+                    onClick = { scope = 1; hasChosenScope = true },
+                    text = { Text(stringResource(R.string.buys_scope_shared)) }
+                )
+            }
+        }
+
+        if (sharedBuys != null && scope == 1) {
+            SharedBuysList(
+                session = sharedBuys,
+                circlesByID = circlesByID,
+                onOpenSession = { isShowingSharedSheet = true },
+                onStart = {
+                    sharedBuys.adoptIdentity()
+                    sharedBuys.start(eventNumber, sharedBuys.nickname)
+                    isShowingSharedSheet = true
+                }
+            )
+        } else if (visibleEntries.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

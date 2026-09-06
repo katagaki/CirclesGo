@@ -2,6 +2,7 @@ package com.tsubuzaki.circlesgo.sharedbuys
 
 import android.content.Context
 import android.net.Uri
+import com.tsubuzaki.circlesgo.R
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -18,7 +19,7 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.util.UUID
 
-class SharedBuysSession(context: Context, private val scope: CoroutineScope) {
+class SharedBuysSession(private val context: Context, private val scope: CoroutineScope) {
 
     private val store = SharedBuysStore(context)
     private val relay = SharedBuysRelay(scope)
@@ -29,6 +30,7 @@ class SharedBuysSession(context: Context, private val scope: CoroutineScope) {
         private set
     var relayBaseUrl by mutableStateOf("ws://10.0.2.2:8787")
     var actorPid by mutableStateOf(0)
+    var nickname by mutableStateOf("")
     var isDebugVisible by mutableStateOf(false)
     var bluetoothPeers by mutableStateOf(0)
         private set
@@ -52,6 +54,16 @@ class SharedBuysSession(context: Context, private val scope: CoroutineScope) {
 
     val items: List<SharedBuyItem> get() = SharedBuyFold.items(changes)
 
+    val yourShare: Int
+        get() = items.filter { it.assignee == actorPid && it.status != SharedBuyStatus.CANCELLED }
+            .sumOf { it.cost }
+
+    val groupTotal: Int
+        get() = items.filter { it.status != SharedBuyStatus.CANCELLED }.sumOf { it.cost }
+
+    val hasUnsentChanges: Boolean
+        get() = status != "connected" && bluetoothPeers == 0 && changes.isNotEmpty()
+
     val members: Map<Int, String> get() = SharedBuyFold.members(changes)
 
     val joinUrl: String?
@@ -62,7 +74,17 @@ class SharedBuysSession(context: Context, private val scope: CoroutineScope) {
     private val versionVector: Map<String, Long>
         get() = changes.groupBy { it.device }.mapValues { entry -> entry.value.maxOf { it.seq } }
 
+    fun adoptIdentity() {
+        val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+        val storedPid = preferences.getInt("My.LastKnownPID", 0)
+        val storedNickname = preferences.getString("My.LastKnownNickname", null)
+        if (storedPid != 0) actorPid = storedPid
+        if (!storedNickname.isNullOrEmpty()) nickname = storedNickname
+        if (nickname.isEmpty()) nickname = context.getString(R.string.buys_shared_you)
+    }
+
     fun restore() {
+        adoptIdentity()
         val snapshot = store.load() ?: return
         sessionKey = snapshot.sessionKey.fromBase64Url()
         deviceId = snapshot.deviceId

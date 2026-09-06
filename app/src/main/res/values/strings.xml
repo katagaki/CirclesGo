@@ -189,4 +189,26 @@
     <string name="grid_size_small">Small</string>
     <string name="list_style_regular">Regular</string>
     <string name="list_style_compact">Compact</string>
+    <string name="buys_scope_mine">My Buys</string>
+    <string name="buys_scope_shared">Shared</string>
+    <string name="buys_shared_only_you">Only you so far</string>
+    <string name="buys_shared_with">Shared with %1$s</string>
+    <string name="buys_shared_with_two">Shared with %1$s and %2$s</string>
+    <string name="buys_shared_with_others">Shared with %1$d others</string>
+    <string name="buys_shared_start">Start a shared list</string>
+    <string name="buys_shared_explain">Your own Buys stay private. A shared list is a separate list that everyone in the session can see and edit.</string>
+    <string name="buys_shared_not_started">No shared list</string>
+    <string name="buys_shared_no_items">Nothing in the shared list</string>
+    <string name="buys_shared_no_items_description">Anything a member adds shows up here.</string>
+    <string name="buys_shared_pending">Some changes haven\'t reached everyone yet.</string>
+    <string name="buys_shared_your_share">Your share</string>
+    <string name="buys_shared_group_total">Group total</string>
+    <string name="buys_shared_bought">%1$s bought this</string>
+    <string name="buys_shared_cancelled">%1$s cancelled this</string>
+    <string name="buys_shared_title">Shared list</string>
+    <string name="buys_shared_scan_to_join">Scan this code to join the shared list</string>
+    <string name="buys_shared_members">Members</string>
+    <string name="buys_shared_end">End sharing on this device</string>
+    <string name="buys_shared_you">You</string>
+    <string name="buys_unknown_circle">Unknown circle (ID: %1$d)</string>
 </resources>

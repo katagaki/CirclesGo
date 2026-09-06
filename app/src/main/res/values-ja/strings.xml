@@ -187,4 +187,26 @@
     <string name="grid_size_small">小</string>
     <string name="list_style_regular">標準</string>
     <string name="list_style_compact">コンパクト</string>
+    <string name="buys_scope_mine">自分の宝物</string>
+    <string name="buys_scope_shared">共有リスト</string>
+    <string name="buys_shared_only_you">まだあなただけです</string>
+    <string name="buys_shared_with">%1$sと共有中</string>
+    <string name="buys_shared_with_two">%1$s・%2$sと共有中</string>
+    <string name="buys_shared_with_others">他%1$d人と共有中</string>
+    <string name="buys_shared_start">共有リストを作成</string>
+    <string name="buys_shared_explain">自分の宝物リストは非公開のままです。共有リストは、参加者全員が見て編集できる別のリストです。</string>
+    <string name="buys_shared_not_started">共有リストがありません</string>
+    <string name="buys_shared_no_items">共有リストに頒布品がありません</string>
+    <string name="buys_shared_no_items_description">参加者の誰かが追加すると、ここに表示されます。</string>
+    <string name="buys_shared_pending">まだ全員に届いていない変更があります。</string>
+    <string name="buys_shared_your_share">あなたの分</string>
+    <string name="buys_shared_group_total">全員の合計</string>
+    <string name="buys_shared_bought">%1$sが購入しました</string>
+    <string name="buys_shared_cancelled">%1$sがキャンセルしました</string>
+    <string name="buys_shared_title">共有リスト</string>
+    <string name="buys_shared_scan_to_join">このQRコードを読み取ると、共有リストに参加できます</string>
+    <string name="buys_shared_members">参加者</string>
+    <string name="buys_shared_end">この端末で共有を終了</string>
+    <string name="buys_shared_you">あなた</string>
+    <string name="buys_unknown_circle">不明なサークル（ID：%1$d）</string>
 </resources>

@@ -27,6 +27,7 @@ import com.tsubuzaki.circlesgo.database.CatalogDatabase
 import com.tsubuzaki.circlesgo.ui.shared.LocalAuthenticator
 import com.tsubuzaki.circlesgo.ui.shared.LocalDemoMode
 import com.tsubuzaki.circlesgo.ui.shared.LocalEvents
+import com.tsubuzaki.circlesgo.ui.shared.LocalSharedBuys
 import com.tsubuzaki.circlesgo.ui.shared.LocalVisitsState
 import com.tsubuzaki.circlesgo.ui.shared.LocalWebCutImageCache
 import com.tsubuzaki.circlesgo.state.CatalogCache
@@ -36,6 +37,7 @@ import com.tsubuzaki.circlesgo.state.Events
 import com.tsubuzaki.circlesgo.state.FavoritesState
 import com.tsubuzaki.circlesgo.state.Mapper
 import com.tsubuzaki.circlesgo.state.Oasis
+import com.tsubuzaki.circlesgo.state.UnifiedPath
 import com.tsubuzaki.circlesgo.state.Unifier
 import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.state.VisitsState
@@ -50,6 +52,7 @@ class MainActivity : ComponentActivity() {
 
     private var authenticator: Authenticator? = null
     private var sharedBuys: SharedBuysSession? = null
+    private var unifierState: Unifier? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
         val events = Events(this)
         val favorites = FavoritesState()
         val unifier = Unifier()
+        unifierState = unifier
         val catalogCache = CatalogCache()
         val oasis = Oasis()
         val demoState = DemoState(this)
@@ -104,7 +108,8 @@ class MainActivity : ComponentActivity() {
                     LocalWebCutImageCache provides webCutImageCache,
                     LocalDemoMode provides isDemoActive,
                     LocalVisitsState provides visitsState,
-                    LocalEvents provides events
+                    LocalEvents provides events,
+                    LocalSharedBuys provides sharedBuys
                 ) {
                     val buys = sharedBuys
                     if (buys != null && buys.isDebugVisible) {
@@ -278,8 +283,10 @@ class MainActivity : ComponentActivity() {
                     }
                     "buys-join" -> {
                         requestBluetoothPermissions(session)
-                        session.join(uri, "Tester")
-                        session.isDebugVisible = true
+                        session.adoptIdentity()
+                        session.join(uri, session.nickname)
+                        unifierState?.setCurrentPath(UnifiedPath.BUYS)
+                        unifierState?.show()
                         return
                     }
                     "buys-add" -> {
