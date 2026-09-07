@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -116,35 +118,48 @@ fun BuysView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Info button row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { isShowingInfo = true }) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = stringResource(R.string.buys_info_title),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-        }
-
-        if (sharedBuys != null) {
-            PrimaryTabRow(selectedTabIndex = scope) {
-                Tab(
-                    selected = scope == 0,
-                    onClick = { scope = 0; hasChosenScope = true },
-                    text = { Text(stringResource(R.string.buys_scope_mine)) }
-                )
-                Tab(
-                    selected = scope == 1,
-                    onClick = { scope = 1; hasChosenScope = true },
-                    text = { Text(stringResource(R.string.buys_scope_shared)) }
-                )
+        // Info button and scope tabs share a single row with one background
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { isShowingInfo = true },
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Info,
+                            contentDescription = stringResource(R.string.buys_info_title),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (sharedBuys != null) {
+                        PrimaryTabRow(
+                            selectedTabIndex = scope,
+                            modifier = Modifier.weight(1f),
+                            containerColor = Color.Transparent,
+                            divider = {}
+                        ) {
+                            Tab(
+                                selected = scope == 0,
+                                onClick = { scope = 0; hasChosenScope = true },
+                                text = { Text(stringResource(R.string.buys_scope_mine)) }
+                            )
+                            Tab(
+                                selected = scope == 1,
+                                onClick = { scope = 1; hasChosenScope = true },
+                                text = { Text(stringResource(R.string.buys_scope_shared)) }
+                            )
+                        }
+                        // Balances the info button so the tabs stay centered
+                        Spacer(modifier = Modifier.width(56.dp))
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             }
         }
 
