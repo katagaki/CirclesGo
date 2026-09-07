@@ -14,6 +14,7 @@ object SharedBuysProfile {
     const val ADVERTISEMENT_WINDOW_SECONDS = 900L
     const val MAX_PAYLOAD_PER_CHUNK = 160
     const val FRAME_MAGIC: Byte = 0x01
+    const val HANDSHAKE_MAGIC: Byte = 0x02
 
     fun window(epochSeconds: Long = System.currentTimeMillis() / 1000): Long =
         epochSeconds / ADVERTISEMENT_WINDOW_SECONDS
@@ -23,6 +24,18 @@ object SharedBuysProfile {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(sessionKey, "HmacSHA256"))
         return mac.doFinal(input).copyOf(2)
+    }
+
+    fun handshake(sessionKey: ByteArray): ByteArray =
+        byteArrayOf(HANDSHAKE_MAGIC) + sessionTag(sessionKey)
+
+    fun isHandshake(frame: ByteArray): Boolean =
+        frame.size == 3 && frame[0] == HANDSHAKE_MAGIC
+
+    fun accepts(frame: ByteArray, sessionKey: ByteArray): Boolean {
+        if (!isHandshake(frame)) return false
+        val tag = frame.copyOfRange(1, 3)
+        return acceptedTags(sessionKey).any { it.contentEquals(tag) }
     }
 
     fun acceptedTags(sessionKey: ByteArray, window: Long = window()): List<ByteArray> =

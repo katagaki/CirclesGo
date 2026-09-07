@@ -245,6 +245,18 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
         sessionKey?.let {
             note("ble tag ${SharedBuysProfile.sessionTag(it).toHex()} window ${SharedBuysProfile.window()}")
+
+            val handshake = SharedBuysProfile.handshake(it)
+            val accepted = SharedBuysProfile.accepts(handshake, it)
+            val stranger = ByteArray(it.size) { 0x5a }
+            val rejected = !SharedBuysProfile.accepts(handshake, stranger)
+            val notConfused = !SharedBuysProfile.isHandshake(frames.first())
+            note(
+                "handshake ${handshake.size}B " +
+                    "accept ${if (accepted) "ok" else "FAILED"} " +
+                    "reject ${if (rejected) "ok" else "FAILED"} " +
+                    "framing ${if (notConfused) "ok" else "FAILED"}"
+            )
         }
     }
 

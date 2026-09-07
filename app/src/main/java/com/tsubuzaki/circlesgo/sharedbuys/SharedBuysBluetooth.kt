@@ -32,6 +32,10 @@ sealed interface BluetoothEvent {
     data class Unavailable(val reason: String) : BluetoothEvent
 }
 
+private const val MTU = 247
+private val CLIENT_CONFIG_UUID: UUID =
+    UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
 @SuppressLint("MissingPermission")
 class SharedBuysBluetooth(private val context: Context) {
 
@@ -44,14 +48,17 @@ class SharedBuysBluetooth(private val context: Context) {
     private val clients = mutableMapOf<String, BluetoothGatt>()
     private val inboxes = mutableMapOf<String, BluetoothGattCharacteristic>()
     private val reassemblers = mutableMapOf<String, SharedBuysFraming.Reassembler>()
-    private val seenDigests = mutableMapOf<String, String>()
+    private val verifiedClients = mutableSetOf<String>()
+    private val verifiedCentrals = mutableSetOf<String>()
+    private val rejectedUntil = mutableMapOf<String, Long>()
+    private val pendingNotifies = ArrayDeque<Pair<ByteArray, BluetoothDevice>>()
 
     private var sessionKey: ByteArray? = null
     private var digest: ByteArray = ByteArray(4)
     private var onEvent: ((BluetoothEvent) -> Unit)? = null
     private var messageCounter: Byte = 0
 
-    val peerCount: Int get() = clients.size + subscribers.size
+    val peerCount: Int get() = verifiedClients.size + verifiedCentrals.size
 
     private val requiredPermissions: List<String>
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -96,7 +103,10 @@ class SharedBuysBluetooth(private val context: Context) {
         inboxes.clear()
         subscribers.clear()
         reassemblers.clear()
-        seenDigests.clear()
+        verifiedClients.clear()
+        verifiedCentrals.clear()
+        rejectedUntil.clear()
+        pendingNotifies.clear()
         runCatching { server?.close() }
         server = null
         sessionKey = null
@@ -104,22 +114,16 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     fun update(digest: ByteArray) {
-        if (this.digest.contentEquals(digest)) return
         this.digest = digest
-        if (missingPermissions().isEmpty() && adapter?.isEnabled == true) advertise()
     }
 
     fun send(payload: ByteArray) {
         messageCounter = (messageCounter + 1).toByte()
         for (frame in SharedBuysFraming.chunks(payload, messageCounter)) {
-            val characteristic = outbox
-            if (characteristic != null) {
-                characteristic.value = frame
-                subscribers.forEach { device ->
-                    runCatching { server?.notifyCharacteristicChanged(device, characteristic, false) }
-                }
-            }
+            subscribers.filter { verifiedCentrals.contains(it.address) }
+                .forEach { device -> notify(frame, device) }
             clients.forEach { (address, gatt) ->
+                if (!verifiedClients.contains(address)) return@forEach
                 inboxes[address]?.let { inbox ->
                     inbox.value = frame
                     inbox.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
@@ -146,7 +150,7 @@ class SharedBuysBluetooth(private val context: Context) {
         )
         outboxCharacteristic.addDescriptor(
             BluetoothGattDescriptor(
-                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"),
+                CLIENT_CONFIG_UUID,
                 BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE
             )
         )
@@ -157,10 +161,9 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     private fun advertise() {
-        val key = sessionKey ?: return
+        sessionKey ?: return
         val advertiser = adapter?.bluetoothLeAdvertiser ?: return
         runCatching { advertiser.stopAdvertising(advertiseCallback) }
-        val payload = SharedBuysProfile.sessionTag(key) + digest + byteArrayOf(peerCount.toByte())
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
@@ -168,7 +171,6 @@ class SharedBuysBluetooth(private val context: Context) {
             .build()
         val data = AdvertiseData.Builder()
             .addServiceUuid(ParcelUuid(SharedBuysProfile.SERVICE_UUID))
-            .addServiceData(ParcelUuid(SharedBuysProfile.SERVICE_UUID), payload)
             .setIncludeDeviceName(false)
             .build()
         runCatching { advertiser.startAdvertising(settings, data, advertiseCallback) }
@@ -186,17 +188,42 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     private fun shouldConnect(result: ScanResult): Boolean {
-        val key = sessionKey ?: return false
-        val payload = result.scanRecord
-            ?.getServiceData(ParcelUuid(SharedBuysProfile.SERVICE_UUID)) ?: return false
-        if (payload.size < 6) return false
-        val tag = payload.copyOfRange(0, 2)
-        if (SharedBuysProfile.acceptedTags(key).none { it.contentEquals(tag) }) return false
-        val theirDigest = payload.copyOfRange(2, 6).toHex()
+        sessionKey ?: return false
         val address = result.device.address
-        if (theirDigest == digest.toHex() && seenDigests[address] == theirDigest) return false
-        seenDigests[address] = theirDigest
-        return true
+        if (clients.containsKey(address)) return false
+        val until = rejectedUntil[address] ?: return true
+        return until <= System.currentTimeMillis()
+    }
+
+    private fun reject(gatt: BluetoothGatt) {
+        rejectedUntil[gatt.device.address] = System.currentTimeMillis() + 60_000L
+        runCatching { gatt.disconnect() }
+    }
+
+    private fun notify(frame: ByteArray, device: BluetoothDevice) {
+        val characteristic = outbox ?: return
+        if (pendingNotifies.isNotEmpty()) {
+            pendingNotifies.addLast(frame to device)
+            return
+        }
+        characteristic.value = frame
+        val sent = runCatching {
+            server?.notifyCharacteristicChanged(device, characteristic, false) == true
+        }.getOrDefault(false)
+        if (!sent) pendingNotifies.addLast(frame to device)
+    }
+
+    private fun flushNotifies() {
+        val characteristic = outbox ?: return
+        while (pendingNotifies.isNotEmpty()) {
+            val (frame, device) = pendingNotifies.first()
+            characteristic.value = frame
+            val sent = runCatching {
+                server?.notifyCharacteristicChanged(device, characteristic, false) == true
+            }.getOrDefault(false)
+            if (!sent) return
+            pendingNotifies.removeFirst()
+        }
     }
 
     private fun deliver(address: String, frame: ByteArray) {
@@ -215,9 +242,7 @@ class SharedBuysBluetooth(private val context: Context) {
             if (!shouldConnect(result)) return
             val address = result.device.address
             if (clients.containsKey(address)) return
-            val gatt = result.device.connectGatt(context, false, gattCallback)
-            clients[address] = gatt
-            onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+            clients[address] = result.device.connectGatt(context, false, gattCallback)
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -228,14 +253,19 @@ class SharedBuysBluetooth(private val context: Context) {
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                gatt.discoverServices()
+                if (!gatt.requestMtu(MTU)) gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 val address = gatt.device.address
                 clients.remove(address)?.close()
                 inboxes.remove(address)
                 reassemblers.remove(address)
+                verifiedClients.remove(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            gatt.discoverServices()
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
@@ -243,23 +273,51 @@ class SharedBuysBluetooth(private val context: Context) {
             service.getCharacteristic(SharedBuysProfile.INBOX_UUID)?.let {
                 inboxes[gatt.device.address] = it
             }
-            service.getCharacteristic(SharedBuysProfile.OUTBOX_UUID)?.let { characteristic ->
-                gatt.setCharacteristicNotification(characteristic, true)
-                characteristic.getDescriptor(
-                    UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-                )?.let { descriptor ->
-                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    runCatching { gatt.writeDescriptor(descriptor) }
-                }
+            val characteristic = service.getCharacteristic(SharedBuysProfile.OUTBOX_UUID)
+            if (characteristic == null) {
+                reject(gatt)
+                return
             }
-            onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+            gatt.setCharacteristicNotification(characteristic, true)
+            val descriptor = characteristic.getDescriptor(CLIENT_CONFIG_UUID)
+            if (descriptor == null) {
+                reject(gatt)
+                return
+            }
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            runCatching { gatt.writeDescriptor(descriptor) }
+        }
+
+        override fun onDescriptorWrite(
+            gatt: BluetoothGatt,
+            descriptor: BluetoothGattDescriptor,
+            status: Int
+        ) {
+            val key = sessionKey ?: return
+            val inbox = inboxes[gatt.device.address] ?: return
+            inbox.value = SharedBuysProfile.handshake(key)
+            inbox.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            runCatching { gatt.writeCharacteristic(inbox) }
         }
 
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
-            characteristic.value?.let { deliver(gatt.device.address, it) }
+            val value = characteristic.value ?: return
+            val address = gatt.device.address
+            if (SharedBuysProfile.isHandshake(value)) {
+                val key = sessionKey
+                if (key == null || !SharedBuysProfile.accepts(value, key)) {
+                    reject(gatt)
+                    return
+                }
+                verifiedClients.add(address)
+                onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                return
+            }
+            if (!verifiedClients.contains(address)) return
+            deliver(address, value)
         }
     }
 
@@ -273,10 +331,23 @@ class SharedBuysBluetooth(private val context: Context) {
             offset: Int,
             value: ByteArray
         ) {
-            deliver(device.address, value)
+            if (SharedBuysProfile.isHandshake(value)) {
+                val key = sessionKey
+                if (key != null && SharedBuysProfile.accepts(value, key)) {
+                    verifiedCentrals.add(device.address)
+                    notify(SharedBuysProfile.handshake(key), device)
+                    onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                }
+            } else if (verifiedCentrals.contains(device.address)) {
+                deliver(device.address, value)
+            }
             if (responseNeeded) {
                 server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             }
+        }
+
+        override fun onNotificationSent(device: BluetoothDevice, status: Int) {
+            flushNotifies()
         }
 
         override fun onDescriptorWriteRequest(
@@ -292,17 +363,19 @@ class SharedBuysBluetooth(private val context: Context) {
                 subscribers.add(device)
             } else {
                 subscribers.remove(device)
+                verifiedCentrals.remove(device.address)
             }
             if (responseNeeded) {
                 server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
             }
-            onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
         }
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 subscribers.remove(device)
+                verifiedCentrals.remove(device.address)
                 reassemblers.remove(device.address)
+                pendingNotifies.removeAll { it.second.address == device.address }
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }
         }
