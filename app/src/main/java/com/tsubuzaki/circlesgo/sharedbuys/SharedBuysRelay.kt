@@ -97,6 +97,24 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         }
     }
 
+    /**
+     * Whether the room key may be handed to this relay.
+     *
+     * The hello frame registers a room by uploading relayAuthKey, the same key that
+     * backs every recordTag. Over ws:// anyone on the path recovers it and can forge
+     * records for any device, so the key only travels over TLS — or to a development
+     * server on this machine, which includes the emulator's alias for its host. A relay
+     * that has not seen the key answers a hello with CLOSE_UNKNOWN_ROOM, which is a
+     * diagnosable failure rather than a silent leak.
+     */
+    private fun allowsKeyUpload(baseUrl: String): Boolean {
+        val url = runCatching { java.net.URI(baseUrl) }.getOrNull() ?: return false
+        val scheme = url.scheme?.lowercase() ?: return false
+        if (scheme == "wss" || scheme == "https") return true
+        val host = url.host?.lowercase() ?: return false
+        return host in listOf("localhost", "127.0.0.1", "::1", "10.0.2.2")
+    }
+
     private fun helloFrame(endpoint: Endpoint): String {
         val relayAuthKey = SharedBuysCrypto.derive(
             SharedBuysCrypto.RELAY_AUTH_INFO,
@@ -110,7 +128,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
             put("v", buildJsonObject {
                 endpoint.vector.forEach { (device, seq) -> put(device, seq) }
             })
-            put("k", relayAuthKey.toBase64Url())
+            if (allowsKeyUpload(endpoint.baseUrl)) put("k", relayAuthKey.toBase64Url())
             put("ts", timestamp)
             put("a", tag.toBase64Url())
         }.toString()

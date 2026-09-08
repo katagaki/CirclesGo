@@ -40,6 +40,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private var lastSeq = 0L
     private var reconnectAttempt = 0
     private var reconnectJob: kotlinx.coroutines.Job? = null
+    private val outbox = mutableListOf<RelayRecord>()
+    private var flushJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
 
@@ -168,6 +170,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         reconnectJob?.cancel()
         reconnectJob = null
         reconnectAttempt = 0
+        flushJob?.cancel()
+        flushJob = null
+        outbox.clear()
         bluetooth.stop()
         bluetoothPeers = 0
         relay.disconnect()
@@ -368,9 +373,33 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         )
         changes.add(change)
         persist()
-        seal(change, key, room)?.let { relay.send(listOf(it)) { event -> handle(event) } }
+        seal(change, key, room)?.let { enqueue(it) }
         sendOverBluetooth(listOf(change))
         bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
+    }
+
+    /** Holds a record briefly so a burst of edits leaves as one frame. */
+    private fun enqueue(record: RelayRecord) {
+        outbox.add(record)
+        if (outbox.size >= RECORDS_PER_FRAME) {
+            flushOutbox()
+            return
+        }
+        if (flushJob != null) return
+        flushJob = scope.launch {
+            kotlinx.coroutines.delay(COALESCE_WINDOW_MS)
+            flushJob = null
+            flushOutbox()
+        }
+    }
+
+    private fun flushOutbox() {
+        flushJob?.cancel()
+        flushJob = null
+        if (outbox.isEmpty()) return
+        val records = outbox.toList()
+        outbox.clear()
+        relay.send(records) { event -> handle(event) }
     }
 
     private fun seal(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
@@ -438,11 +467,26 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val key = sessionKey ?: return
         val room = roomId ?: return
         val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
+        val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
         val known = changes.mapTo(mutableSetOf()) { it.id }
         var added = 0
         for (record in records) {
             val identifier = "${record.device}#${record.seq}"
             if (known.contains(identifier)) continue
+            // Whoever handed us this record — the relay, or a peer over Bluetooth — is
+            // not trusted to have authored it. Check the tag before it enters the log.
+            val authentic = runCatching {
+                SharedBuysCrypto.recordTag(
+                    record.device,
+                    record.seq,
+                    record.blob.fromBase64Url(),
+                    relayAuthKey
+                ).contentEquals(record.tag.fromBase64Url())
+            }.getOrDefault(false)
+            if (!authentic) {
+                note("bad tag on $identifier")
+                continue
+            }
             val payload = runCatching {
                 val blob = record.blob.fromBase64Url()
                 val plaintext =
@@ -490,6 +534,16 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     companion object {
         /** The relay refuses a frame carrying more than this (MAX_RECORDS_PER_FRAME). */
         private const val RECORDS_PER_FRAME = 32
+
+        /**
+         * How long an outbound record waits for company before it is sent.
+         *
+         * The relay's bucket is 20 messages per 10 seconds and addItem alone emits two
+         * changes, so a frame per change put ten quick adds over the limit and earned a
+         * rate-limit close. A quarter second is under the threshold of feeling laggy and
+         * collapses a burst of typing into one frame.
+         */
+        private const val COALESCE_WINDOW_MS = 250L
 
         /** The frame from the wire format note, byte for byte. */
         private const val TEST_VECTOR = "010101a1b2c3d4000000000000002a0040" +
