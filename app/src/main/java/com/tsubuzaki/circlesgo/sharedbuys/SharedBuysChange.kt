@@ -11,6 +11,16 @@ object SharedBuyKind {
     const val REMOVE_ITEM = 4
     const val MEMBER_JOINED = 5
     const val RENAME_ITEM = 6
+
+    /**
+     * Whether this kind is carried over the peer-to-peer Bluetooth path.
+     *
+     * Bluetooth frames are chunked at 160 bytes and reassembled by hand, so the
+     * transport is only dependable for small, self-contained payloads. Item names,
+     * costs and images travel over the relay exclusively; on-site we only exchange
+     * status flips, which is what makes the list useful while walking a venue.
+     */
+    fun travelsOverBluetooth(kind: Int): Boolean = kind == SET_STATUS
 }
 
 object SharedBuyStatus {
@@ -60,10 +70,12 @@ object SharedBuyFold {
     fun items(changes: List<SharedBuyChange>): List<SharedBuyItem> {
         val byId = mutableMapOf<String, SharedBuyItem>()
         val order = mutableListOf<String>()
+        val deferred = mutableMapOf<String, MutableList<SharedBuyChange>>()
+
         for (change in changes.sortedWith(compareBy({ it.seq }, { it.device }))) {
             val payload = change.payload
-            when (payload.kind) {
-                SharedBuyKind.ADD_ITEM -> {
+            when {
+                payload.kind == SharedBuyKind.ADD_ITEM -> {
                     if (!byId.containsKey(payload.itemId)) order.add(payload.itemId)
                     byId[payload.itemId] = SharedBuyItem(
                         id = payload.itemId,
@@ -75,31 +87,38 @@ object SharedBuyFold {
                         isRemoved = false,
                         lastTouchedBy = payload.actor
                     )
+                    // A mutation can land before the addItem it targets: Bluetooth carries
+                    // status flips but never the item itself, so a peer can learn that
+                    // something was bought before the relay delivers what it is. Replay
+                    // whatever was parked on this item, in the same order it was folded.
+                    deferred.remove(payload.itemId)?.forEach { apply(it, byId) }
                 }
-                SharedBuyKind.SET_STATUS -> byId[payload.itemId]?.let {
-                    byId[payload.itemId] = it.copy(
-                        status = payload.value ?: SharedBuyStatus.PENDING,
-                        lastTouchedBy = payload.actor
-                    )
-                }
-                SharedBuyKind.SET_ASSIGNEE -> byId[payload.itemId]?.let {
-                    byId[payload.itemId] = it.copy(assignee = payload.value, lastTouchedBy = payload.actor)
-                }
-                SharedBuyKind.SET_COST -> byId[payload.itemId]?.let {
-                    byId[payload.itemId] = it.copy(cost = payload.value ?: 0, lastTouchedBy = payload.actor)
-                }
-                SharedBuyKind.RENAME_ITEM -> byId[payload.itemId]?.let {
-                    byId[payload.itemId] = it.copy(
-                        name = payload.text.orEmpty(),
-                        lastTouchedBy = payload.actor
-                    )
-                }
-                SharedBuyKind.REMOVE_ITEM -> byId[payload.itemId]?.let {
-                    byId[payload.itemId] = it.copy(isRemoved = true)
-                }
+                payload.kind == SharedBuyKind.MEMBER_JOINED -> Unit
+                !byId.containsKey(payload.itemId) ->
+                    deferred.getOrPut(payload.itemId) { mutableListOf() }.add(change)
+                else -> apply(change, byId)
             }
         }
         return order.mapNotNull { byId[it] }.filter { !it.isRemoved }
+    }
+
+    private fun apply(change: SharedBuyChange, byId: MutableMap<String, SharedBuyItem>) {
+        val payload = change.payload
+        val current = byId[payload.itemId] ?: return
+        byId[payload.itemId] = when (payload.kind) {
+            SharedBuyKind.SET_STATUS -> current.copy(
+                status = payload.value ?: SharedBuyStatus.PENDING,
+                lastTouchedBy = payload.actor
+            )
+            SharedBuyKind.SET_ASSIGNEE ->
+                current.copy(assignee = payload.value, lastTouchedBy = payload.actor)
+            SharedBuyKind.SET_COST ->
+                current.copy(cost = payload.value ?: 0, lastTouchedBy = payload.actor)
+            SharedBuyKind.RENAME_ITEM ->
+                current.copy(name = payload.text.orEmpty(), lastTouchedBy = payload.actor)
+            SharedBuyKind.REMOVE_ITEM -> current.copy(isRemoved = true)
+            else -> return
+        }
     }
 
     fun members(changes: List<SharedBuyChange>): Map<Int, String> {

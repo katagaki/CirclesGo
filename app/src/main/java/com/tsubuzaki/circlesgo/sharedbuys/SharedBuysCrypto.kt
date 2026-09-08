@@ -12,7 +12,7 @@ object SharedBuysCrypto {
     const val TOPIC_INFO = "circles-buys/v1/topic"
     const val OPS_INFO = "circles-buys/v1/ops"
     const val RELAY_AUTH_INFO = "circles-buys/v1/relay-auth"
-    private const val TAG_LENGTH = 16
+    const val TAG_LENGTH = 16
 
     private val random = SecureRandom()
 

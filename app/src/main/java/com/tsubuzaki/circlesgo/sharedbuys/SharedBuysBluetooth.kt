@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
@@ -22,17 +23,23 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import java.util.UUID
 
 sealed interface BluetoothEvent {
     data class PeerCount(val count: Int) : BluetoothEvent
+
+    /** A peer finished the handshake, carrying the digest it advertised if we scanned it. */
+    data class PeerVerified(val digest: ByteArray?) : BluetoothEvent
     data class Payload(val bytes: ByteArray) : BluetoothEvent
     data class Unavailable(val reason: String) : BluetoothEvent
 }
 
 private const val MTU = 247
+private const val REFRESH_INTERVAL_MS = 30_000L
 private val CLIENT_CONFIG_UUID: UUID =
     UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -52,6 +59,11 @@ class SharedBuysBluetooth(private val context: Context) {
     private val verifiedCentrals = mutableSetOf<String>()
     private val rejectedUntil = mutableMapOf<String, Long>()
     private val pendingNotifies = ArrayDeque<Pair<ByteArray, BluetoothDevice>>()
+    private val writeQueues = mutableMapOf<String, ArrayDeque<ByteArray>>()
+    private val writing = mutableSetOf<String>()
+    private val peerDigests = mutableMapOf<String, ByteArray>()
+    private val handler = Handler(Looper.getMainLooper())
+    private var advertisedWindow: Long? = null
 
     private var sessionKey: ByteArray? = null
     private var digest: ByteArray = ByteArray(4)
@@ -93,9 +105,12 @@ class SharedBuysBluetooth(private val context: Context) {
         publishService()
         advertise()
         scan()
+        startRefreshing()
     }
 
     fun stop() {
+        handler.removeCallbacks(refresh)
+        advertisedWindow = null
         runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback) }
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         clients.values.forEach { runCatching { it.close() } }
@@ -107,6 +122,9 @@ class SharedBuysBluetooth(private val context: Context) {
         verifiedCentrals.clear()
         rejectedUntil.clear()
         pendingNotifies.clear()
+        writeQueues.clear()
+        writing.clear()
+        peerDigests.clear()
         runCatching { server?.close() }
         server = null
         sessionKey = null
@@ -114,7 +132,9 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     fun update(digest: ByteArray) {
+        if (this.digest.contentEquals(digest)) return
         this.digest = digest
+        advertise()
     }
 
     fun send(payload: ByteArray) {
@@ -124,12 +144,47 @@ class SharedBuysBluetooth(private val context: Context) {
                 .forEach { device -> notify(frame, device) }
             clients.forEach { (address, gatt) ->
                 if (!verifiedClients.contains(address)) return@forEach
-                inboxes[address]?.let { inbox ->
+                enqueueWrite(gatt, frame)
+            }
+        }
+    }
+
+    /**
+     * A GATT client can only have one write in flight. Writing every chunk of a message
+     * back to back hands the stack the second one before it has reported the first, and
+     * the second is what gets dropped — so a two chunk message never reassembles.
+     */
+    private fun enqueueWrite(gatt: BluetoothGatt, frame: ByteArray) {
+        val address = gatt.device.address
+        writeQueues.getOrPut(address) { ArrayDeque() }.addLast(frame)
+        pumpWrites(gatt)
+    }
+
+    private fun pumpWrites(gatt: BluetoothGatt) {
+        val address = gatt.device.address
+        if (writing.contains(address)) return
+        val queue = writeQueues[address] ?: return
+        val inbox = inboxes[address] ?: return
+        val frame = queue.removeFirstOrNull() ?: return
+        writing.add(address)
+        val sent = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeCharacteristic(
+                    inbox,
+                    frame,
+                    BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                ) == BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                run {
                     inbox.value = frame
                     inbox.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-                    runCatching { gatt.writeCharacteristic(inbox) }
+                    gatt.writeCharacteristic(inbox)
                 }
             }
+        }.getOrDefault(false)
+        if (!sent) {
+            writing.remove(address)
         }
     }
 
@@ -161,9 +216,10 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     private fun advertise() {
-        sessionKey ?: return
+        val key = sessionKey ?: return
         val advertiser = adapter?.bluetoothLeAdvertiser ?: return
         runCatching { advertiser.stopAdvertising(advertiseCallback) }
+        advertisedWindow = SharedBuysProfile.window()
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
@@ -173,7 +229,36 @@ class SharedBuysBluetooth(private val context: Context) {
             .addServiceUuid(ParcelUuid(SharedBuysProfile.SERVICE_UUID))
             .setIncludeDeviceName(false)
             .build()
-        runCatching { advertiser.startAdvertising(settings, data, advertiseCallback) }
+        // A 128 bit service UUID and its service data do not both fit in the 31 byte
+        // advertisement, so the room tag and digest go in the scan response. iOS reads
+        // the merged record, and puts the same bytes in its local name.
+        val scanResponse = AdvertiseData.Builder()
+            .addServiceData(
+                ParcelUuid(SharedBuysProfile.SERVICE_UUID),
+                SharedBuysProfile.advertisement(key, digest)
+            )
+            .setIncludeDeviceName(false)
+            .build()
+        runCatching {
+            advertiser.startAdvertising(settings, data, scanResponse, advertiseCallback)
+        }
+    }
+
+    /**
+     * The advertised tag is only valid for its window, so it has to be reissued before
+     * the window turns over, or peers stop recognising us as part of the room.
+     */
+    private fun startRefreshing() {
+        handler.removeCallbacks(refresh)
+        handler.postDelayed(refresh, REFRESH_INTERVAL_MS)
+    }
+
+    private val refresh = object : Runnable {
+        override fun run() {
+            if (sessionKey == null) return
+            if (advertisedWindow != SharedBuysProfile.window()) advertise()
+            handler.postDelayed(this, REFRESH_INTERVAL_MS)
+        }
     }
 
     private fun scan() {
@@ -242,6 +327,22 @@ class SharedBuysBluetooth(private val context: Context) {
             if (!shouldConnect(result)) return
             val address = result.device.address
             if (clients.containsKey(address)) return
+            val key = sessionKey ?: return
+            // A peer that carries no room bytes is not necessarily a stranger — an iOS
+            // app in the background cannot advertise a local name — so it still gets a
+            // chance at the handshake. One that carries the wrong room is a stranger,
+            // and connecting to it could only end in a failed handshake.
+            val advertisement = SharedBuysProfile.advertisement(
+                result.scanRecord?.getServiceData(ParcelUuid(SharedBuysProfile.SERVICE_UUID)),
+                result.scanRecord?.deviceName
+            )
+            if (advertisement != null) {
+                if (!SharedBuysProfile.accepts(advertisement, key)) {
+                    rejectedUntil[address] = System.currentTimeMillis() + 60_000L
+                    return
+                }
+                peerDigests[address] = SharedBuysProfile.digest(advertisement)
+            }
             clients[address] = result.device.connectGatt(context, false, gattCallback)
         }
 
@@ -260,6 +361,9 @@ class SharedBuysBluetooth(private val context: Context) {
                 inboxes.remove(address)
                 reassemblers.remove(address)
                 verifiedClients.remove(address)
+                writeQueues.remove(address)
+                writing.remove(address)
+                peerDigests.remove(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }
         }
@@ -294,10 +398,16 @@ class SharedBuysBluetooth(private val context: Context) {
             status: Int
         ) {
             val key = sessionKey ?: return
-            val inbox = inboxes[gatt.device.address] ?: return
-            inbox.value = SharedBuysProfile.handshake(key)
-            inbox.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-            runCatching { gatt.writeCharacteristic(inbox) }
+            enqueueWrite(gatt, SharedBuysProfile.handshake(key))
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            writing.remove(gatt.device.address)
+            pumpWrites(gatt)
         }
 
         override fun onCharacteristicChanged(
@@ -314,6 +424,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 }
                 verifiedClients.add(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                onEvent?.invoke(BluetoothEvent.PeerVerified(peerDigests[address]))
                 return
             }
             if (!verifiedClients.contains(address)) return
@@ -337,6 +448,8 @@ class SharedBuysBluetooth(private val context: Context) {
                     verifiedCentrals.add(device.address)
                     notify(SharedBuysProfile.handshake(key), device)
                     onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                    // We never scanned this one, so its digest is unknown.
+                    onEvent?.invoke(BluetoothEvent.PeerVerified(null))
                 }
             } else if (verifiedCentrals.contains(device.address)) {
                 deliver(device.address, value)

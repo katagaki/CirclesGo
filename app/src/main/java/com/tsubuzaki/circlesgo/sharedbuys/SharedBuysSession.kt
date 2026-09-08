@@ -10,13 +10,6 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
-import kotlinx.serialization.json.put
 import java.util.UUID
 
 class SharedBuysSession(private val context: Context, private val scope: CoroutineScope) {
@@ -73,6 +66,20 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     private val versionVector: Map<String, Long>
         get() = changes.groupBy { it.device }.mapValues { entry -> entry.value.maxOf { it.seq } }
+
+    /**
+     * The version vector covering only what Bluetooth carries.
+     *
+     * The full vector counts relay-only changes, so advertising it to a peer would
+     * claim we hold status flips whose sequence numbers sit below a name or cost we
+     * happened to receive over the relay. The peer would then filter those flips out
+     * of its reply and they would never arrive. The peer-to-peer path has to reason
+     * about its own subset of the log.
+     */
+    private val bluetoothVersionVector: Map<String, Long>
+        get() = changes.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
+            .groupBy { it.device }
+            .mapValues { entry -> entry.value.maxOf { it.seq } }
 
     fun adoptIdentity() {
         val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
@@ -152,13 +159,13 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     fun startBluetooth() {
         if (!isBluetoothEnabled) return
         val key = sessionKey ?: return
-        bluetooth.start(key, SharedBuysDigest.bytes(versionVector)) { event ->
+        bluetooth.start(key, SharedBuysDigest.bytes(bluetoothVersionVector)) { event ->
             when (event) {
                 is BluetoothEvent.PeerCount -> {
                     bluetoothPeers = event.count
                     note("bluetooth peers ${event.count}")
-                    if (event.count > 0) sendWant()
                 }
+                is BluetoothEvent.PeerVerified -> handshakeCompleted(event.digest)
                 is BluetoothEvent.Payload -> handleBluetooth(event.bytes)
                 is BluetoothEvent.Unavailable -> note("bluetooth: ${event.reason}")
             }
@@ -172,61 +179,46 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     fun missingBluetoothPermissions(): List<String> = bluetooth.missingPermissions()
 
-    private fun sendWant() {
-        val frame = buildJsonObject {
-            put("t", "want")
-            put("v", buildJsonObject { versionVector.forEach { (device, seq) -> put(device, seq) } })
+    /**
+     * A peer that advertised our own digest holds the same Bluetooth-eligible log, so
+     * there is nothing for a version vector exchange to turn up.
+     */
+    private fun handshakeCompleted(peerDigest: ByteArray?) {
+        if (peerDigest != null &&
+            peerDigest.contentEquals(SharedBuysDigest.bytes(bluetoothVersionVector))
+        ) {
+            note("peer is level, skipping want")
+            return
         }
-        bluetooth.send(frame.toString().toByteArray())
+        sendWant()
+    }
+
+    private fun sendWant() {
+        SharedBuysWire.wantFrames(bluetoothVersionVector).forEach { bluetooth.send(it) }
     }
 
     private fun handleBluetooth(payload: ByteArray) {
-        val frame = runCatching {
-            Json.parseToJsonElement(String(payload)).jsonObject
-        }.getOrNull() ?: return
-        when (frame["t"]?.jsonPrimitive?.content) {
-            "want" -> {
-                val theirs = frame["v"]?.jsonObject.orEmpty()
+        when (val frame = SharedBuysWire.decode(payload)) {
+            is SharedBuysFrame.Want -> {
                 val missing = changes.filter { change ->
-                    change.seq > (theirs[change.device]?.jsonPrimitive?.long ?: 0L)
+                    SharedBuyKind.travelsOverBluetooth(change.payload.kind) &&
+                        change.seq > (frame.vector[change.device] ?: 0L)
                 }
                 sendOverBluetooth(missing)
             }
-            "ops" -> {
-                val records = frame["o"]?.jsonArray?.mapNotNull { element ->
-                    val entry = element.jsonObject
-                    RelayRecord(
-                        entry["d"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                        entry["n"]?.jsonPrimitive?.long ?: return@mapNotNull null,
-                        entry["b"]?.jsonPrimitive?.content ?: return@mapNotNull null,
-                        entry["a"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    )
-                }.orEmpty()
-                ingest(records)
-            }
+            is SharedBuysFrame.Changes -> ingest(frame.records)
+            null -> Unit
         }
     }
 
     private fun sendOverBluetooth(outgoing: List<SharedBuyChange>) {
-        if (outgoing.isEmpty() || bluetoothPeers == 0) return
+        val eligible = outgoing.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
+        if (eligible.isEmpty() || bluetoothPeers == 0) return
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val records = outgoing.mapNotNull { seal(it, key, room) }
+        val records = eligible.mapNotNull { seal(it, key, room) }
         if (records.isEmpty()) return
-        val frame = buildJsonObject {
-            put("t", "ops")
-            put("o", buildJsonArray {
-                records.forEach { record ->
-                    add(buildJsonObject {
-                        put("d", record.device)
-                        put("n", record.seq)
-                        put("b", record.blob)
-                        put("a", record.tag)
-                    })
-                }
-            })
-        }
-        bluetooth.send(frame.toString().toByteArray())
+        SharedBuysWire.changeFrames(records).forEach { bluetooth.send(it) }
     }
 
     fun runSelfTest() {
@@ -258,6 +250,54 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                     "framing ${if (notConfused) "ok" else "FAILED"}"
             )
         }
+
+        checkWire()
+    }
+
+    /**
+     * Encodes the wire format note's test vector from scratch and parses it back.
+     *
+     * This walks the whole construction — HKDF, AES-256-GCM, the record tag and the
+     * frame layout — so a change on either platform that moves a byte shows up here
+     * rather than as a peer that silently cannot open anything.
+     */
+    private fun checkWire() {
+        val key = ByteArray(32) { it.toByte() }
+        val room = SharedBuysCrypto.roomId(key)
+        val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
+        val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
+        val plaintext = "{\"a\":12345,\"k\":1,\"i\":\"a1b2c3d4\",\"c\":98765,\"v\":1}".toByteArray()
+        val blob = SharedBuysCrypto.seal(plaintext, contentKey, room, "a1b2c3d4", 42)
+        val recordTag = SharedBuysCrypto.recordTag("a1b2c3d4", 42, blob, relayAuthKey)
+        val record = RelayRecord("a1b2c3d4", 42, blob.toBase64Url(), recordTag.toBase64Url())
+        val frame = SharedBuysWire.changeFrames(listOf(record)).firstOrNull()
+        if (frame == null) {
+            note("wire vector FAILED to encode")
+            return
+        }
+        note("wire ${frame.size}B vector ${if (frame.toHex() == TEST_VECTOR) "ok" else "FAILED"}")
+
+        val decoded = SharedBuysWire.decode(frame) as? SharedBuysFrame.Changes
+        val first = decoded?.records?.firstOrNull()
+        val changesOk = first != null && first.device == record.device &&
+            first.seq == record.seq && first.blob == record.blob && first.tag == record.tag
+        val vector = mapOf("a1b2c3d4" to 42L, "cafebabe" to 260L)
+        val wantFrame = SharedBuysWire.wantFrames(vector).firstOrNull()
+        val wantOk = wantFrame != null &&
+            (SharedBuysWire.decode(wantFrame) as? SharedBuysFrame.Want)?.vector == vector
+        note(
+            "wire round trip changes ${if (changesOk) "ok" else "FAILED"} " +
+                "want ${if (wantOk) "ok" else "FAILED"}"
+        )
+
+        // A blobLen larger than what is left must be refused, not sliced.
+        val overrun = SharedBuysWire.decode(frame.copyOf(frame.size - 1)) == null
+        val wrongVersion = frame.copyOf().also { it[0] = 0x7F }
+        val skipped = SharedBuysWire.decode(wrongVersion) == null
+        note(
+            "wire bounds ${if (overrun) "ok" else "FAILED"} " +
+                "version ${if (skipped) "ok" else "FAILED"}"
+        )
     }
 
     fun addItem(name: String, cost: Int, circleId: Int): String {
@@ -296,7 +336,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         persist()
         seal(change, key, room)?.let { relay.send(listOf(it)) { event -> handle(event) } }
         sendOverBluetooth(listOf(change))
-        bluetooth.update(SharedBuysDigest.bytes(versionVector))
+        bluetooth.update(SharedBuysDigest.bytes(bluetoothVersionVector))
     }
 
     private fun seal(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
@@ -374,7 +414,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
         if (added > 0) {
             persist()
-            bluetooth.update(SharedBuysDigest.bytes(versionVector))
+            bluetooth.update(SharedBuysDigest.bytes(bluetoothVersionVector))
             note("received $added")
         }
     }
@@ -395,5 +435,13 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private fun note(message: String) {
         log.add(0, message)
         if (log.size > 40) log.removeAt(log.size - 1)
+    }
+
+    companion object {
+        /** The frame from the wire format note, byte for byte. */
+        private const val TEST_VECTOR = "010101a1b2c3d4000000000000002a0040" +
+            "2ab0b4c6e69b2900dc6274a75e783cb336899016f440b24fcb8da6dfb640f662" +
+            "4e39050b00d0727ff8af49ad0b512d5b55fd21a0f1ce3cdbc148f01437111d57" +
+            "f5d63b17d693abf3217419adf1b582d2"
     }
 }

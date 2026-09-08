@@ -15,6 +15,7 @@ object SharedBuysProfile {
     const val MAX_PAYLOAD_PER_CHUNK = 160
     const val FRAME_MAGIC: Byte = 0x01
     const val HANDSHAKE_MAGIC: Byte = 0x02
+    const val ADVERTISEMENT_LENGTH = 6
 
     fun window(epochSeconds: Long = System.currentTimeMillis() / 1000): Long =
         epochSeconds / ADVERTISEMENT_WINDOW_SECONDS
@@ -40,6 +41,38 @@ object SharedBuysProfile {
 
     fun acceptedTags(sessionKey: ByteArray, window: Long = window()): List<ByteArray> =
         listOf(window - 1, window, window + 1).map { sessionTag(sessionKey, it) }
+
+    /**
+     * The bytes a peer needs before it is worth connecting: the rolling tag that scopes
+     * the advertisement to this room, and the digest of what the sender holds.
+     *
+     * Without the tag every nearby CiRCLES user connects and then fails the handshake,
+     * which at a venue is a stream of connections that can only fail. The tag rotates
+     * with the 15 minute window, so it scopes discovery without making a device
+     * trackable across the day.
+     */
+    fun advertisement(sessionKey: ByteArray, digest: ByteArray): ByteArray =
+        (sessionTag(sessionKey) + digest.copyOf(4)).copyOf(ADVERTISEMENT_LENGTH)
+
+    /** iOS cannot advertise service data, so it carries the same bytes as a local name. */
+    fun localName(sessionKey: ByteArray, digest: ByteArray): String =
+        advertisement(sessionKey, digest).toHex()
+
+    /** Reads the advertisement out of whichever field the peer's platform could use. */
+    fun advertisement(serviceData: ByteArray?, localName: String?): ByteArray? {
+        if (serviceData != null && serviceData.size == ADVERTISEMENT_LENGTH) return serviceData
+        if (localName == null || localName.length != ADVERTISEMENT_LENGTH * 2) return null
+        return runCatching { localName.fromHex() }.getOrNull()
+            ?.takeIf { it.size == ADVERTISEMENT_LENGTH }
+    }
+
+    fun digest(advertisement: ByteArray): ByteArray = advertisement.copyOfRange(2, advertisement.size)
+
+    fun accepts(advertisement: ByteArray, sessionKey: ByteArray, window: Long = window()): Boolean {
+        if (advertisement.size != ADVERTISEMENT_LENGTH) return false
+        val tag = advertisement.copyOf(2)
+        return acceptedTags(sessionKey, window).any { it.contentEquals(tag) }
+    }
 }
 
 object SharedBuysDigest {
@@ -88,27 +121,60 @@ object SharedBuysFraming {
 
     private const val MAX_PAYLOAD_PER_CHUNK_SAFE = SharedBuysProfile.MAX_PAYLOAD_PER_CHUNK
 
+    /**
+     * Partial messages, held until every chunk of one arrives.
+     *
+     * The message id is a byte, so it wraps every 256 sends and a partial message can
+     * meet a later, unrelated one under the same id. Buffers are therefore bounded and
+     * expiring: a partial that never completes cannot survive to corrupt a reuse of its
+     * id, and a peer that walks out of range mid-message cannot leak memory.
+     */
     class Reassembler {
-        private val buffers = mutableMapOf<Byte, MutableMap<Int, ByteArray>>()
+        private class Partial(val count: Int) {
+            val parts = mutableMapOf<Int, ByteArray>()
+            var touched = 0L
+        }
 
-        fun accept(frame: ByteArray): ByteArray? {
+        private val buffers = mutableMapOf<Byte, Partial>()
+
+        fun accept(frame: ByteArray, now: Long = System.currentTimeMillis()): ByteArray? {
             if (frame.size <= 4 || frame[0] != SharedBuysProfile.FRAME_MAGIC) return null
             val messageId = frame[1]
             val index = frame[2].toUByte().toInt()
             val count = frame[3].toUByte().toInt()
             if (count == 0 || index >= count) return null
-            val parts = buffers.getOrPut(messageId) { mutableMapOf() }
-            parts[index] = frame.copyOfRange(4, frame.size)
-            if (parts.size != count) return null
+
+            buffers.entries.removeAll { now - it.value.touched >= LIFETIME_MS }
+            // A different chunk count under a known id means the id was reused rather
+            // than continued, so the old parts are stale.
+            var partial = buffers[messageId]
+            if (partial == null || partial.count != count) {
+                partial = Partial(count)
+                buffers[messageId] = partial
+            }
+            partial.parts[index] = frame.copyOfRange(4, frame.size)
+            partial.touched = now
+
+            if (partial.parts.size != count) {
+                if (buffers.size > MAX_PARTIALS) {
+                    buffers.minByOrNull { it.value.touched }?.let { buffers.remove(it.key) }
+                }
+                return null
+            }
             buffers.remove(messageId)
-            val output = ByteArray(parts.values.sumOf { it.size })
+            val output = ByteArray(partial.parts.values.sumOf { it.size })
             var at = 0
             for (position in 0 until count) {
-                val part = parts[position] ?: return null
+                val part = partial.parts[position] ?: return null
                 part.copyInto(output, at)
                 at += part.size
             }
             return output
+        }
+
+        companion object {
+            const val MAX_PARTIALS = 4
+            const val LIFETIME_MS = 10_000L
         }
     }
 }
