@@ -135,6 +135,7 @@
     <string name="tab_buys">買い物</string>
     <string name="buys_section_title">買い物リスト</string>
     <string name="buys_add_item">アイテムを追加</string>
+    <string name="buys_add_item_shared">共有リストに追加</string>
     <string name="buys_item_name_placeholder">アイテム名</string>
     <string name="buys_item_cost_placeholder">金額</string>
     <string name="buys_total">合計</string>

@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.data.local.BuysCache
+import com.tsubuzaki.circlesgo.ui.shared.LocalSharedBuys
 
 /**
  * Buys editor inside the circle detail view: add items, rename them, set
@@ -52,6 +55,7 @@ fun CircleDetailBuysSection(
     val buysVersion by buysCache.version.collectAsState()
     var items by remember { mutableStateOf<List<BuysCache.BuyItem>>(emptyList()) }
     var isEditing by remember { mutableStateOf(false) }
+    var isAddingToSharedList by remember { mutableStateOf(false) }
 
     LaunchedEffect(buysVersion, circleID, eventNumber) {
         items = buysCache.entry(circleID, eventNumber)?.items?.sortedBy { it.sortOrder }
@@ -130,7 +134,85 @@ fun CircleDetailBuysSection(
                 fontWeight = FontWeight.Medium
             )
         }
+
+        val sharedBuys = LocalSharedBuys.current
+        if (sharedBuys != null && sharedBuys.isActive) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isAddingToSharedList = true }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PersonAdd,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.buys_add_item_shared),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (isAddingToSharedList) {
+                SharedBuyAddDialog(
+                    onDismiss = { isAddingToSharedList = false },
+                    onConfirm = { name, cost ->
+                        sharedBuys.addItem(name, cost, circleID)
+                        isAddingToSharedList = false
+                    }
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun SharedBuyAddDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var cost by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.buys_add_item_shared)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.buys_item_name_placeholder)) },
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                OutlinedTextField(
+                    value = cost,
+                    onValueChange = { cost = it.filter { character -> character.isDigit() } },
+                    label = { Text(stringResource(R.string.buys_item_cost_placeholder)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim(), cost.toIntOrNull() ?: 0) },
+                enabled = name.isNotBlank()
+            ) {
+                Text(stringResource(R.string.ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable

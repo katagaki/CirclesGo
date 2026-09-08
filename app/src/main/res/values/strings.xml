@@ -137,6 +137,7 @@
     <string name="tab_buys">Buys</string>
     <string name="buys_section_title">Buys</string>
     <string name="buys_add_item">Add Item</string>
+    <string name="buys_add_item_shared">Add to shared list</string>
     <string name="buys_item_name_placeholder">Item name</string>
     <string name="buys_item_cost_placeholder">Cost</string>
     <string name="buys_total">Total</string>

@@ -39,7 +39,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     val log = mutableStateListOf<String>()
     val changes = mutableStateListOf<SharedBuyChange>()
 
-    var sessionKey: ByteArray? = null
+    var sessionKey: ByteArray? by mutableStateOf(null)
         private set
     var deviceId by mutableStateOf("")
         private set
