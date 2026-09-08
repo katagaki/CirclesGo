@@ -260,10 +260,23 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
     }
 
-    fun addItem(name: String, cost: Int, circleId: Int) {
+    fun addItem(name: String, cost: Int, circleId: Int): String {
         val itemId = UUID.randomUUID().toString().take(8)
         append(SharedBuyKind.ADD_ITEM, itemId, circleId, name, cost)
         append(SharedBuyKind.SET_ASSIGNEE, itemId, circleId, null, actorPid)
+        return itemId
+    }
+
+    fun rename(itemId: String, circleId: Int, name: String) {
+        append(SharedBuyKind.RENAME_ITEM, itemId, circleId, name, null)
+    }
+
+    fun setCost(itemId: String, circleId: Int, cost: Int) {
+        append(SharedBuyKind.SET_COST, itemId, circleId, null, cost)
+    }
+
+    fun remove(itemId: String, circleId: Int) {
+        append(SharedBuyKind.REMOVE_ITEM, itemId, circleId, null, null)
     }
 
     fun cycle(item: SharedBuyItem) {

@@ -10,6 +10,7 @@ object SharedBuyKind {
     const val SET_COST = 3
     const val REMOVE_ITEM = 4
     const val MEMBER_JOINED = 5
+    const val RENAME_ITEM = 6
 }
 
 object SharedBuyStatus {
@@ -86,6 +87,12 @@ object SharedBuyFold {
                 }
                 SharedBuyKind.SET_COST -> byId[payload.itemId]?.let {
                     byId[payload.itemId] = it.copy(cost = payload.value ?: 0, lastTouchedBy = payload.actor)
+                }
+                SharedBuyKind.RENAME_ITEM -> byId[payload.itemId]?.let {
+                    byId[payload.itemId] = it.copy(
+                        name = payload.text.orEmpty(),
+                        lastTouchedBy = payload.actor
+                    )
                 }
                 SharedBuyKind.REMOVE_ITEM -> byId[payload.itemId]?.let {
                     byId[payload.itemId] = it.copy(isRemoved = true)

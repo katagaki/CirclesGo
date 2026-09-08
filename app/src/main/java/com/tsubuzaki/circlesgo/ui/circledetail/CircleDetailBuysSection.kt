@@ -14,7 +14,6 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,7 +56,7 @@ fun CircleDetailBuysSection(
     val buysVersion by buysCache.version.collectAsState()
     var items by remember { mutableStateOf<List<BuysCache.BuyItem>>(emptyList()) }
     var isEditing by remember { mutableStateOf(false) }
-    var isAddingToSharedList by remember { mutableStateOf(false) }
+    val sharedDrafts = remember { mutableStateListOf<SharedBuyDraft>() }
 
     LaunchedEffect(buysVersion, circleID, eventNumber) {
         items = buysCache.entry(circleID, eventNumber)?.items?.sortedBy { it.sortOrder }
@@ -109,6 +110,22 @@ fun CircleDetailBuysSection(
             }
         }
 
+        val activeSession = LocalSharedBuys.current
+        if (activeSession != null && activeSession.isActive) {
+            sharedDrafts.forEach { draft ->
+                key(draft.id) {
+                    SharedBuyDraftRow(
+                        circleID = circleID,
+                        draft = draft,
+                        onDelete = {
+                            draft.itemId?.let { activeSession.remove(it, circleID) }
+                            sharedDrafts.remove(draft)
+                        }
+                    )
+                }
+            }
+        }
+
         // Add item button
         Row(
             modifier = Modifier
@@ -140,7 +157,7 @@ fun CircleDetailBuysSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isAddingToSharedList = true }
+                    .clickable { sharedDrafts.add(SharedBuyDraft()) }
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -158,61 +175,8 @@ fun CircleDetailBuysSection(
                     fontWeight = FontWeight.Medium
                 )
             }
-            if (isAddingToSharedList) {
-                SharedBuyAddDialog(
-                    onDismiss = { isAddingToSharedList = false },
-                    onConfirm = { name, cost ->
-                        sharedBuys.addItem(name, cost, circleID)
-                        isAddingToSharedList = false
-                    }
-                )
-            }
         }
     }
-}
-
-@Composable
-private fun SharedBuyAddDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, Int) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var cost by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.buys_add_item_shared)) },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.buys_item_name_placeholder)) },
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                OutlinedTextField(
-                    value = cost,
-                    onValueChange = { cost = it.filter { character -> character.isDigit() } },
-                    label = { Text(stringResource(R.string.buys_item_cost_placeholder)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name.trim(), cost.toIntOrNull() ?: 0) },
-                enabled = name.isNotBlank()
-            ) {
-                Text(stringResource(R.string.ok))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        }
-    )
 }
 
 @Composable
