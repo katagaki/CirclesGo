@@ -64,11 +64,20 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             "circles-app://buys-join?v=1&e=$eventNumber&k=${it.toBase64Url()}"
         }
 
+    /**
+     * What we hold with no gap in it, per device.
+     *
+     * A vector of max(seq) claims everything below the highest sequence number we have
+     * seen, so a change learned out of order — over Bluetooth, or from a peer's backlog
+     * — buries whatever is still missing underneath it, and the relay withholds the gap
+     * forever. The contiguous prefix claims only what is actually complete; anything
+     * above a hole is sent again and deduped on ingest.
+     */
     private val versionVector: Map<String, Long>
-        get() = changes.groupBy { it.device }.mapValues { entry -> entry.value.maxOf { it.seq } }
+        get() = contiguousPrefix(changes)
 
     /**
-     * The version vector covering only what Bluetooth carries.
+     * The same prefix, over the subset Bluetooth carries.
      *
      * The full vector counts relay-only changes, so advertising it to a peer would
      * claim we hold status flips whose sequence numbers sit below a name or cost we
@@ -77,9 +86,34 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
      * about its own subset of the log.
      */
     private val bluetoothVersionVector: Map<String, Long>
+        get() = contiguousPrefix(
+            changes.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
+        )
+
+    /**
+     * What the advertised digest summarises: everything held over Bluetooth, gaps and
+     * all.
+     *
+     * The digest answers "is there anything to exchange at all", so it has to count a
+     * change sitting above a hole. The vector we send answers "what may you skip", and
+     * must not.
+     */
+    private val bluetoothDigestVector: Map<String, Long>
         get() = changes.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
             .groupBy { it.device }
             .mapValues { entry -> entry.value.maxOf { it.seq } }
+
+    /**
+     * The highest n for which every sequence number from 1 to n is present. A device we
+     * hold nothing contiguous for is left out rather than claimed at 0.
+     */
+    private fun contiguousPrefix(changes: List<SharedBuyChange>): Map<String, Long> =
+        changes.groupBy { it.device }.mapNotNull { entry ->
+            val held = entry.value.mapTo(mutableSetOf()) { it.seq }
+            var next = 1L
+            while (held.contains(next)) next += 1
+            if (next > 1L) entry.key to next - 1 else null
+        }.toMap()
 
     fun adoptIdentity() {
         val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
@@ -159,7 +193,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     fun startBluetooth() {
         if (!isBluetoothEnabled) return
         val key = sessionKey ?: return
-        bluetooth.start(key, SharedBuysDigest.bytes(bluetoothVersionVector)) { event ->
+        bluetooth.start(key, SharedBuysDigest.bytes(bluetoothDigestVector)) { event ->
             when (event) {
                 is BluetoothEvent.PeerCount -> {
                     bluetoothPeers = event.count
@@ -185,7 +219,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
      */
     private fun handshakeCompleted(peerDigest: ByteArray?) {
         if (peerDigest != null &&
-            peerDigest.contentEquals(SharedBuysDigest.bytes(bluetoothVersionVector))
+            peerDigest.contentEquals(SharedBuysDigest.bytes(bluetoothDigestVector))
         ) {
             note("peer is level, skipping want")
             return
@@ -336,7 +370,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         persist()
         seal(change, key, room)?.let { relay.send(listOf(it)) { event -> handle(event) } }
         sendOverBluetooth(listOf(change))
-        bluetooth.update(SharedBuysDigest.bytes(bluetoothVersionVector))
+        bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
     }
 
     private fun seal(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
@@ -383,18 +417,28 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
     }
 
+    /**
+     * Uploads every change this device authored, in frames the relay will accept.
+     *
+     * Taking the first 32 and discarding the rest left later changes with no path to the
+     * server at all: resend() only runs on connect, and always re-took the same 32. Each
+     * page is sealed as it is sent, so a long backlog no longer pays the whole seal cost
+     * — encode, two derivations and AES-GCM per change — before transmitting any of it.
+     */
     private fun resend() {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val mine = changes.filter { it.device == deviceId }.mapNotNull { seal(it, key, room) }
-        if (mine.isNotEmpty()) relay.send(mine.take(32)) { event -> handle(event) }
+        changes.filter { it.device == deviceId }.chunked(RECORDS_PER_FRAME).forEach { page ->
+            val records = page.mapNotNull { seal(it, key, room) }
+            if (records.isNotEmpty()) relay.send(records) { event -> handle(event) }
+        }
     }
 
     private fun ingest(records: List<RelayRecord>) {
         val key = sessionKey ?: return
         val room = roomId ?: return
         val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
-        val known = changes.map { it.id }.toSet()
+        val known = changes.mapTo(mutableSetOf()) { it.id }
         var added = 0
         for (record in records) {
             val identifier = "${record.device}#${record.seq}"
@@ -410,11 +454,17 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 continue
             }
             changes.add(SharedBuyChange(record.device, record.seq, payload))
+            // A batch can carry the same record twice — a relay echo, or a want reply
+            // overlapping the live stream — so the set has to grow as we append.
+            known.add(identifier)
+            // A Lamport clock. Without it a fresh device's seq 1 sorts under an
+            // established peer's seq 30, and the older edit wins on every screen.
+            lastSeq = maxOf(lastSeq, record.seq)
             added += 1
         }
         if (added > 0) {
             persist()
-            bluetooth.update(SharedBuysDigest.bytes(bluetoothVersionVector))
+            bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
             note("received $added")
         }
     }
@@ -438,6 +488,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     }
 
     companion object {
+        /** The relay refuses a frame carrying more than this (MAX_RECORDS_PER_FRAME). */
+        private const val RECORDS_PER_FRAME = 32
+
         /** The frame from the wire format note, byte for byte. */
         private const val TEST_VECTOR = "010101a1b2c3d4000000000000002a0040" +
             "2ab0b4c6e69b2900dc6274a75e783cb336899016f440b24fcb8da6dfb640f662" +
