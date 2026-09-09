@@ -318,12 +318,45 @@ class MainActivity : ComponentActivity() {
     private fun requestBluetoothPermissions(session: SharedBuysSession) {
         val missing = session.missingBluetoothPermissions()
         if (missing.isNotEmpty()) {
-            androidx.core.app.ActivityCompat.requestPermissions(this, missing.toTypedArray(), 4001)
+            androidx.core.app.ActivityCompat.requestPermissions(
+                this,
+                missing.toTypedArray(),
+                BLUETOOTH_PERMISSION_REQUEST
+            )
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        sharedBuys?.resume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // The radio and the socket are worth releasing while the app is away; the log
+        // itself is already persisted, so onResume brings the room back.
+        if (isFinishing) sharedBuys?.pause()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+        deviceId: Int
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults, deviceId)
+        // Without this the user granted the Bluetooth permissions and nothing happened:
+        // startBluetooth() had already bailed and was never called again.
+        if (requestCode == BLUETOOTH_PERMISSION_REQUEST) sharedBuys?.startBluetooth()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         authenticator?.teardownReachability()
+        sharedBuys?.close()
+    }
+
+    companion object {
+        private const val BLUETOOTH_PERMISSION_REQUEST = 4001
     }
 }

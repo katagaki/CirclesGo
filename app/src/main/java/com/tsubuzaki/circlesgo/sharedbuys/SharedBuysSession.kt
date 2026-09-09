@@ -135,6 +135,40 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = snapshot.lastSeq
         changes.clear()
         changes.addAll(snapshot.changes)
+        note("restored room $roomId as $deviceId")
+        // A restored session reported isActive but had no transport behind it: the relay
+        // was never reconnected and Bluetooth never started, so the room was dead until
+        // the user left and rejoined.
+        connect()
+        startBluetooth()
+    }
+
+    /**
+     * Brings the transports back after the process, or the user, went away.
+     *
+     * Safe to call repeatedly: connect() cancels any pending reconnect before dialling,
+     * and startBluetooth() no-ops without a session key or the permissions.
+     */
+    fun resume() {
+        if (!isActive) return
+        connect()
+        startBluetooth()
+    }
+
+    /** Releases the radio and the socket without ending the session. */
+    fun pause() {
+        stopBluetooth()
+        relay.disconnect()
+    }
+
+    /** Everything this session holds, for an activity that is going away for good. */
+    fun close() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        flushJob?.cancel()
+        flushJob = null
+        bluetooth.stop()
+        relay.close()
     }
 
     fun start(eventNumber: Int, nickname: String) {

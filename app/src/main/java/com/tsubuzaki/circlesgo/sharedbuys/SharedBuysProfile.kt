@@ -16,6 +16,18 @@ object SharedBuysProfile {
     const val FRAME_MAGIC: Byte = 0x01
     const val HANDSHAKE_MAGIC: Byte = 0x02
     const val ADVERTISEMENT_LENGTH = 6
+    const val FRAME_HEADER_LENGTH = 4
+    const val DEFAULT_ATT_MTU = 23
+
+    /**
+     * The body a chunk may carry over a link with the given ATT MTU.
+     *
+     * Never larger than MAX_PAYLOAD_PER_CHUNK, and never smaller than one byte, so a
+     * miserly link produces many small chunks instead of silent truncation. Three bytes
+     * of the MTU belong to the ATT write header.
+     */
+    fun payloadLimit(mtu: Int): Int =
+        maxOf(1, minOf(MAX_PAYLOAD_PER_CHUNK, mtu - 3 - FRAME_HEADER_LENGTH))
 
     fun window(epochSeconds: Long = System.currentTimeMillis() / 1000): Long =
         epochSeconds / ADVERTISEMENT_WINDOW_SECONDS
@@ -104,10 +116,26 @@ object SharedBuysDigest {
 
 object SharedBuysFraming {
 
-    fun chunks(payload: ByteArray, messageId: Byte): List<ByteArray> {
-        if (payload.isEmpty()) return emptyList()
-        val slices = payload.toList().chunked(MAX_PAYLOAD_PER_CHUNK_SAFE)
-        val count = minOf(slices.size, 255).toByte()
+    /**
+     * Splits a payload into chunks that fit limit bytes of body each.
+     *
+     * limit comes from what the link actually negotiated, not from a constant: on a
+     * connection stuck at the 23 byte default MTU, a 160 byte chunk was truncated to 20
+     * bytes on the wire, the 4 byte header still parsed, reassembly "succeeded", and the
+     * result was corrupt ciphertext with nothing to point at.
+     */
+    fun chunks(
+        payload: ByteArray,
+        messageId: Byte,
+        limit: Int = SharedBuysProfile.MAX_PAYLOAD_PER_CHUNK
+    ): List<ByteArray> {
+        if (payload.isEmpty() || limit <= 0) return emptyList()
+        val slices = payload.toList().chunked(limit)
+        // The chunk index and count are single bytes, so a message needing more than 255
+        // chunks cannot be described by this header at all. Sending it anyway wrapped
+        // the index and spliced unrelated chunks together on the far side.
+        if (slices.size > 255) return emptyList()
+        val count = slices.size.toByte()
         return slices.mapIndexed { index, slice ->
             ByteBuffer.allocate(4 + slice.size)
                 .put(SharedBuysProfile.FRAME_MAGIC)
@@ -118,8 +146,6 @@ object SharedBuysFraming {
                 .array()
         }
     }
-
-    private const val MAX_PAYLOAD_PER_CHUNK_SAFE = SharedBuysProfile.MAX_PAYLOAD_PER_CHUNK
 
     /**
      * Partial messages, held until every chunk of one arrives.

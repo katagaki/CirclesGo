@@ -82,6 +82,17 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         if (socket != null) scope.launch { runCatching { socket.close() } }
     }
 
+    /**
+     * Disconnects and releases the HTTP client.
+     *
+     * The Ktor client owns an OkHttp connection pool and its dispatcher threads; leaving
+     * it open leaked both on every activity recreation, a rotation included.
+     */
+    fun close() {
+        disconnect()
+        runCatching { client.close() }
+    }
+
     fun send(records: List<RelayRecord>, onEvent: (RelayEvent) -> Unit = {}) {
         val socket = session
         if (socket == null) {
