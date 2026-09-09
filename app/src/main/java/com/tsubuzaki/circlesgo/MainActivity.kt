@@ -204,8 +204,6 @@ class MainActivity : ComponentActivity() {
                                 onGuestTapped = { buys?.enterGuestMode() }
                             )
                         } else {
-                            // Trigger data reload when authenticator becomes ready
-                            // or when transitioning from authenticating to authenticated
                             var hasTriggeredInitialLoad by rememberSaveable {
                                 mutableStateOf(false)
                             }
@@ -217,7 +215,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // Watch for active event changes
                             val activeEvent by events.activeEvent.collectAsState()
                             var previousActiveEventNumber by rememberSaveable {
                                 mutableStateOf<Int?>(
