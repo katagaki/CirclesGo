@@ -211,6 +211,7 @@
     <string name="buys_shared_you">あなた</string>
     <string name="buys_unknown_circle">不明なサークル（ID：%1$d）</string>
     <!-- Guest Mode -->
+    <string name="guest_leave">このリストから退出</string>
     <string name="login_guest_mode">ゲストとして参加</string>
     <string name="guest_not_joined">リストに参加していません</string>
     <string name="guest_not_joined_description">共有リストのQRコードを読み取ると、リストの中身を見て、買えたものにチェックを付けられます。</string>

@@ -103,7 +103,7 @@ fun GuestView(session: SharedBuysSession) {
                     isConfirmingLeave = false
                     session.leave()
                 }) {
-                    Text(stringResource(R.string.buys_shared_end))
+                    Text(stringResource(R.string.guest_leave))
                 }
             },
             dismissButton = {
@@ -210,7 +210,7 @@ private fun JoinedList(session: SharedBuysSession, onLeave: () -> Unit) {
                 modifier = Modifier.padding(horizontal = 16.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.buys_shared_end),
+                    text = stringResource(R.string.guest_leave),
                     color = MaterialTheme.colorScheme.error
                 )
             }
