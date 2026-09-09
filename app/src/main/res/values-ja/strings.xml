@@ -210,4 +210,16 @@
     <string name="buys_shared_end">この端末で共有を終了</string>
     <string name="buys_shared_you">あなた</string>
     <string name="buys_unknown_circle">不明なサークル（ID：%1$d）</string>
+    <!-- Guest Mode -->
+    <string name="login_guest_mode">ゲストとして参加</string>
+    <string name="guest_not_joined">リストに参加していません</string>
+    <string name="guest_not_joined_description">共有リストのQRコードを読み取ると、リストの中身を見て、買えたものにチェックを付けられます。</string>
+    <string name="guest_scan">QRコードを読み取る</string>
+    <string name="guest_scan_unavailable">この端末はQRコードの読み取りに対応していません。リストを共有した人に参加用リンクを送ってもらってください。</string>
+    <string name="guest_read_only">ゲストは品物にチェックを付けられますが、追加や編集はできません。</string>
+    <string name="guest_exit">ゲストモードを終了</string>
+    <string name="guest_exit_title">ゲストモードを終了しますか？</string>
+    <string name="guest_exit_message">参加中のリストから退出し、ゲスト用の名前も破棄されます。</string>
+    <string name="guest_leave_title">リストから退出しますか？</string>
+    <string name="guest_leave_message">もう一度参加するには、QRコードを読み取り直す必要があります。</string>
 </resources>

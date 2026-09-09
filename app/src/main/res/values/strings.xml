@@ -212,4 +212,16 @@
     <string name="buys_shared_end">End sharing on this device</string>
     <string name="buys_shared_you">You</string>
     <string name="buys_unknown_circle">Unknown circle (ID: %1$d)</string>
+    <!-- Guest Mode -->
+    <string name="login_guest_mode">Join as a Guest</string>
+    <string name="guest_not_joined">Not in a List</string>
+    <string name="guest_not_joined_description">Scan a shared list\'s QR code to see what\'s on it and tick off the things you\'ve bought.</string>
+    <string name="guest_scan">Scan QR Code</string>
+    <string name="guest_scan_unavailable">This device can\'t scan QR codes. Ask whoever shared the list to send you the join link instead.</string>
+    <string name="guest_read_only">As a guest you can tick items off, but not add or edit them.</string>
+    <string name="guest_exit">Exit Guest Mode</string>
+    <string name="guest_exit_title">Exit Guest Mode?</string>
+    <string name="guest_exit_message">You\'ll leave the list you\'re in, and the guest name you were given will be discarded.</string>
+    <string name="guest_leave_title">Leave This List?</string>
+    <string name="guest_leave_message">You\'ll need to scan the QR code again to rejoin.</string>
 </resources>

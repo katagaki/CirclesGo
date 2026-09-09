@@ -128,7 +128,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     val joinUrl: String?
         get() = sessionKey?.let {
-            "circles-app://buys-join?v=1&e=$eventNumber&k=${it.toBase64Url()}"
+            "circles-app://$JOIN_HOST?v=1&e=$eventNumber&k=${it.toBase64Url()}"
         }
 
     /**
@@ -770,6 +770,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     }
 
     companion object {
+        /** The host of the join deep link, shared by the QR code and the scanner. */
+        const val JOIN_HOST = "buys-join"
+
         const val GUEST_MODE_KEY = "Guest.IsActive"
         private const val GUEST_NICKNAME_KEY = "Guest.Nickname"
 

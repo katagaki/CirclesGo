@@ -191,7 +191,7 @@ private fun SharedWithRow(session: SharedBuysSession, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun SharedBuyRow(session: SharedBuysSession, item: SharedBuyItem) {
+internal fun SharedBuyRow(session: SharedBuysSession, item: SharedBuyItem) {
     val isMine = item.assignee == session.actorPid
     val toucher = session.members[item.lastTouchedBy]
     Row(

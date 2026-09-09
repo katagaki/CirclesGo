@@ -91,6 +91,9 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
+    // Google Play Services (QR code scanner for Guest Mode)
+    implementation(libs.play.services.code.scanner)
+
     // AndroidX Browser (Custom Tabs)
     implementation(libs.browser)
 

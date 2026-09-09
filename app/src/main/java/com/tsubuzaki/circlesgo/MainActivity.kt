@@ -44,6 +44,7 @@ import com.tsubuzaki.circlesgo.state.VisitsState
 import com.tsubuzaki.circlesgo.ui.login.LoginView
 import com.tsubuzaki.circlesgo.ui.theme.CirclesGoTheme
 import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysSession
+import com.tsubuzaki.circlesgo.ui.guest.GuestView
 import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuysDebugScreen
 import com.tsubuzaki.circlesgo.ui.unified.UnifiedView
 import kotlinx.coroutines.launch
@@ -123,7 +124,13 @@ class MainActivity : ComponentActivity() {
                         val isReady by auth.isReady.collectAsState()
                         val token by auth.token.collectAsState()
 
-                        if (isDemoActive) {
+                        // Guest Mode is a different app, not a mode of this one: no
+                        // catalog, so no map, no browsing and no favourites. Checked
+                        // before the login branch so a guest is never shown a sign-in
+                        // screen they have no account for.
+                        if (buys != null && buys.isGuest) {
+                            GuestView(session = buys)
+                        } else if (isDemoActive) {
                             var hasTriggeredDemoLoad by rememberSaveable {
                                 mutableStateOf(false)
                             }
@@ -191,7 +198,7 @@ class MainActivity : ComponentActivity() {
                         } else if (isAuthenticating || token == null) {
                             LoginView(
                                 authURL = auth.authURL,
-                                onDemoTapped = { demoState.activate() }
+                                onGuestTapped = { buys?.enterGuestMode() }
                             )
                         } else {
                             // Trigger data reload when authenticator becomes ready
@@ -281,7 +288,7 @@ class MainActivity : ComponentActivity() {
                         session.isDebugVisible = true
                         return
                     }
-                    "buys-join" -> {
+                    SharedBuysSession.JOIN_HOST -> {
                         requestBluetoothPermissions(session)
                         session.adoptIdentity()
                         session.join(uri, session.nickname)
