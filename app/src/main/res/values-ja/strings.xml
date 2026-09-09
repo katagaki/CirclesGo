@@ -223,4 +223,8 @@
     <string name="guest_exit_message">参加中のリストから退出し、ゲスト用の名前も破棄されます。</string>
     <string name="guest_leave_title">リストから退出しますか？</string>
     <string name="guest_leave_message">もう一度参加するには、QRコードを読み取り直す必要があります。</string>
+    <string name="shared_buys_channel_name">共有宝物リスト</string>
+    <string name="shared_buys_live_done">担当分はすべて完了しました</string>
+    <string name="shared_buys_live_next">¥%1$d・%2$d/%3$d 購入済み</string>
+    <string name="shared_buys_live_progress">%1$d/%2$d 購入済み</string>
 </resources>

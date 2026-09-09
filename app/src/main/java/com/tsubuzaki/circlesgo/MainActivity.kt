@@ -1,6 +1,8 @@
 package com.tsubuzaki.circlesgo
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -43,6 +45,7 @@ import com.tsubuzaki.circlesgo.state.UserSelections
 import com.tsubuzaki.circlesgo.state.VisitsState
 import com.tsubuzaki.circlesgo.ui.login.LoginView
 import com.tsubuzaki.circlesgo.ui.theme.CirclesGoTheme
+import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysHost
 import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysSession
 import com.tsubuzaki.circlesgo.ui.guest.GuestView
 import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuysDebugScreen
@@ -95,7 +98,7 @@ class MainActivity : ComponentActivity() {
             demoState = demoState
         )
 
-        sharedBuys = SharedBuysSession(this, lifecycleScope).also { it.restore() }
+        sharedBuys = SharedBuysHost.session(this)
 
         handleDeepLink(intent)
 
@@ -336,13 +339,31 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         sharedBuys?.resume()
+        requestNotificationPermission()
+    }
+
+    /**
+     * Asked for while a session is running, which is the only time the Live Update has
+     * anything to show. Without it the foreground service still runs and still syncs —
+     * the ongoing notification is simply not drawn.
+     */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (sharedBuys?.isActive != true) return
+        val permission = android.Manifest.permission.POST_NOTIFICATIONS
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(permission), NOTIFICATION_PERMISSION_REQUEST)
     }
 
     override fun onPause() {
         super.onPause()
         // The radio and the socket are worth releasing while the app is away; the log
         // itself is already persisted, so onResume brings the room back.
-        if (isFinishing) sharedBuys?.pause()
+        // A running session keeps its socket: the foreground service behind the Live
+        // Update is what the relay's push wakes, and it has nothing to wake into if the
+        // transports were torn down on the way out.
+        val buys = sharedBuys
+        if (isFinishing && buys?.isActive != true) buys?.pause()
     }
 
     override fun onRequestPermissionsResult(
@@ -360,10 +381,14 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         authenticator?.teardownReachability()
-        sharedBuys?.close()
+        // The session outlives the activity now, so only an idle one is released here;
+        // there is one per process, so a rotation no longer leaks a Ktor client either.
+        val buys = sharedBuys
+        if (buys?.isActive != true) buys?.close()
     }
 
     companion object {
         private const val BLUETOOTH_PERMISSION_REQUEST = 4001
+        private const val NOTIFICATION_PERMISSION_REQUEST = 4002
     }
 }

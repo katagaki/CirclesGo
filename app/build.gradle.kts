@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
 }
 
 fun loadProperties(filename: String): Map<String, String> {
@@ -93,6 +94,10 @@ dependencies {
 
     // Google Play Services (QR code scanner for Guest Mode)
     implementation(libs.play.services.code.scanner)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // AndroidX Browser (Custom Tabs)
     implementation(libs.browser)

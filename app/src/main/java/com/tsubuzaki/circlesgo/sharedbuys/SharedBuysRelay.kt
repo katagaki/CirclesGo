@@ -46,7 +46,8 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         val roomId: String,
         val deviceId: String,
         val sessionKey: ByteArray,
-        val vector: Map<String, Long>
+        val vector: Map<String, Long>,
+        val pushToken: String? = null
     )
 
     private val client = HttpClient(OkHttp) { install(WebSockets) }
@@ -153,6 +154,12 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
             if (allowsKeyUpload(endpoint.baseUrl)) put("k", relayAuthKey.toBase64Url())
             put("ts", timestamp)
             put("a", tag.toBase64Url())
+            endpoint.pushToken?.let { token ->
+                put("p", buildJsonObject {
+                    put("pl", "fcm")
+                    put("tk", token)
+                })
+            }
         }.toString()
     }
 

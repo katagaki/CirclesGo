@@ -225,4 +225,9 @@
     <string name="guest_exit_message">You\'ll leave the list you\'re in, and the guest name you were given will be discarded.</string>
     <string name="guest_leave_title">Leave This List?</string>
     <string name="guest_leave_message">You\'ll need to scan the QR code again to rejoin.</string>
+    <string name="shared_buys_channel_id" translatable="false">shared_buys</string>
+    <string name="shared_buys_channel_name">Shared Buys</string>
+    <string name="shared_buys_live_done">You\'ve bought everything on your list</string>
+    <string name="shared_buys_live_next">¥%1$d · %2$d of %3$d bought</string>
+    <string name="shared_buys_live_progress">%1$d of %2$d bought</string>
 </resources>

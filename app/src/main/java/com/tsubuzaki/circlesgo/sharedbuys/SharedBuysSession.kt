@@ -42,6 +42,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         private set
     var isBluetoothEnabled by mutableStateOf(true)
 
+    /** Fires whenever the folded list moves, so the Live Update can follow it. */
+    var onChanged: (() -> Unit)? = null
+
     val log = mutableStateListOf<String>()
     val changes = mutableStateListOf<SharedBuyChange>()
 
@@ -79,6 +82,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     private fun invalidateFold() {
         foldVersion += 1
+        onChanged?.invoke()
     }
 
     val items: List<SharedBuyItem>
@@ -264,6 +268,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         changes.addAll(snapshot.changes)
         invalidateFold()
         note("restored room $roomId as $deviceId")
+        SharedBuysLiveUpdateService.start(context)
         // A restored session reported isActive but had no transport behind it: the relay
         // was never reconnected and Bluetooth never started, so the room was dead until
         // the user left and rejoined.
@@ -309,6 +314,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("started room $roomId as $deviceId")
+        SharedBuysLiveUpdateService.start(context)
         connect()
         startBluetooth()
     }
@@ -328,6 +334,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("joined room $roomId as $deviceId")
+        SharedBuysLiveUpdateService.start(context)
         connect()
         startBluetooth()
     }
@@ -348,6 +355,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = 0
         status = "idle"
         store.clear()
+        SharedBuysLiveUpdateService.stop(context)
         note("left session")
     }
 
@@ -357,8 +365,18 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         reconnectJob?.cancel()
         reconnectJob = null
         status = "connecting"
+        // The token is cached, so the first hello of a cold start carries it; a token
+        // minted later reconnects once, and only once, through onFresh.
+        SharedBuysPush.refresh(context) { if (isActive) connect() }
         relay.connect(
-            SharedBuysRelay.Endpoint(relayBaseUrl, room, deviceId, key, versionVector)
+            SharedBuysRelay.Endpoint(
+                relayBaseUrl,
+                room,
+                deviceId,
+                key,
+                versionVector,
+                SharedBuysPush.token(context)
+            )
         ) { event -> handle(event) }
     }
 
