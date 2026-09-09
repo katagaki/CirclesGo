@@ -28,7 +28,10 @@ private val palette = listOf(
 
 @Composable
 fun MemberInitial(nickname: String, size: Int = 26, isMine: Boolean = false) {
-    val color = palette[kotlin.math.abs(nickname.hashCode()) % palette.size]
+    // Widened before taking the magnitude: abs(Int.MIN_VALUE) is still negative, which
+    // would index the palette out of bounds. iOS mirrors this hash so the same member
+    // draws the same colour on both platforms.
+    val color = palette[((nickname.hashCode().toLong().let { if (it < 0) -it else it }) % palette.size).toInt()]
     Box(
         modifier = Modifier
             .size(size.dp)

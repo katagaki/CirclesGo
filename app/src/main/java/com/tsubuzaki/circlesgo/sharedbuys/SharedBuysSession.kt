@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -41,13 +42,40 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private var reconnectAttempt = 0
     private var reconnectJob: kotlinx.coroutines.Job? = null
     private val outbox = mutableListOf<RelayRecord>()
+    private val persistMutex = kotlinx.coroutines.sync.Mutex()
     private var flushJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
 
     val roomId: String? get() = sessionKey?.let { SharedBuysCrypto.roomId(it) }
 
-    val items: List<SharedBuyItem> get() = SharedBuyFold.items(changes)
+    /**
+     * The fold of the log, kept until the log changes underneath it.
+     *
+     * items and members were recomputed on every read — per row, per circle, and again
+     * inside yourShare and groupTotal — which sorted and folded the whole log well over a
+     * hundred times per frame. foldVersion is the observable the getters read, so Compose
+     * still recomposes when the log moves.
+     */
+    private var foldVersion by mutableStateOf(0)
+    private var cachedItems: List<SharedBuyItem> = emptyList()
+    private var cachedItemsVersion = -1
+    private var cachedMembers: Map<Int, String> = emptyMap()
+    private var cachedMembersVersion = -1
+
+    private fun invalidateFold() {
+        foldVersion += 1
+    }
+
+    val items: List<SharedBuyItem>
+        get() {
+            val version = foldVersion
+            if (cachedItemsVersion != version) {
+                cachedItems = SharedBuyFold.items(changes)
+                cachedItemsVersion = version
+            }
+            return cachedItems
+        }
 
     val yourShare: Int
         get() = items.filter { it.assignee == actorPid && it.status != SharedBuyStatus.CANCELLED }
@@ -59,7 +87,15 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     val hasUnsentChanges: Boolean
         get() = status != "connected" && bluetoothPeers == 0 && changes.isNotEmpty()
 
-    val members: Map<Int, String> get() = SharedBuyFold.members(changes)
+    val members: Map<Int, String>
+        get() {
+            val version = foldVersion
+            if (cachedMembersVersion != version) {
+                cachedMembers = SharedBuyFold.members(changes)
+                cachedMembersVersion = version
+            }
+            return cachedMembers
+        }
 
     val joinUrl: String?
         get() = sessionKey?.let {
@@ -121,9 +157,26 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
         val storedPid = preferences.getInt("My.LastKnownPID", 0)
         val storedNickname = preferences.getString("My.LastKnownNickname", null)
-        if (storedPid != 0) actorPid = storedPid
+        actorPid = if (storedPid != 0) storedPid else localActorId()
         if (!storedNickname.isNullOrEmpty()) nickname = storedNickname
         if (nickname.isEmpty()) nickname = context.getString(R.string.buys_shared_you)
+    }
+
+    /**
+     * A stable stand-in identity for someone who is not signed in.
+     *
+     * Leaving actorPid at 0 made every signed-out member the same actor: members collapsed
+     * to a single entry, every item looked assigned to you, and yourShare equalled
+     * groupTotal on both phones. Negative so it cannot collide with a real circle.ms PID,
+     * and stored so it survives relaunches.
+     */
+    private fun localActorId(): Int {
+        val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+        val existing = preferences.getInt("My.LocalActorID", 0)
+        if (existing != 0) return existing
+        val minted = -(1 + kotlin.random.Random.nextInt(Int.MAX_VALUE))
+        preferences.edit().putInt("My.LocalActorID", minted).apply()
+        return minted
     }
 
     fun restore() {
@@ -135,6 +188,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = snapshot.lastSeq
         changes.clear()
         changes.addAll(snapshot.changes)
+        invalidateFold()
         note("restored room $roomId as $deviceId")
         // A restored session reported isActive but had no transport behind it: the relay
         // was never reconnected and Bluetooth never started, so the room was dead until
@@ -177,6 +231,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         this.eventNumber = eventNumber
         lastSeq = 0
         changes.clear()
+        invalidateFold()
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("started room $roomId as $deviceId")
@@ -188,11 +243,14 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val raw = uri.getQueryParameter("k") ?: return note("bad join link")
         val key = runCatching { raw.fromBase64Url() }.getOrNull()
         if (key == null || key.size != 32) return note("bad join link")
+        // Joining a second room is leaving the first.
+        if (isActive) leave()
         sessionKey = key
         deviceId = SharedBuysCrypto.newDeviceId()
         eventNumber = uri.getQueryParameter("e")?.toIntOrNull() ?: 0
         lastSeq = 0
         changes.clear()
+        invalidateFold()
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
         note("joined room $roomId as $deviceId")
@@ -212,6 +270,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         relay.disconnect()
         sessionKey = null
         changes.clear()
+        invalidateFold()
         lastSeq = 0
         status = "idle"
         store.clear()
@@ -406,6 +465,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             payload = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value)
         )
         changes.add(change)
+        invalidateFold()
         persist()
         seal(change, key, room)?.let { enqueue(it) }
         sendOverBluetooth(listOf(change))
@@ -502,67 +562,100 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
     }
 
+    /**
+     * Opens incoming records away from the thread that delivered them.
+     *
+     * The Bluetooth path used to derive two keys, open GCM, mutate Compose state and
+     * write SharedPreferences inline on a binder callback, blocking the BLE stack the
+     * whole time. Opening is pure work over the batch, so it moves to a worker; only the
+     * append comes back to the main thread.
+     */
     private fun ingest(records: List<RelayRecord>) {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
+        val known = changes.mapTo(mutableSetOf()) { it.id }
+        val fresh = records.filter { "${it.device}#${it.seq}" !in known }
+        if (fresh.isEmpty()) return
+        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val opened = fresh.mapNotNull { open(it, key, room) }
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { adopt(opened) }
+        }
+    }
+
+    private fun open(record: RelayRecord, key: ByteArray, room: String): SharedBuyChange? {
+        val identifier = "${record.device}#${record.seq}"
         val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
+        // Whoever handed us this record — the relay, or a peer over Bluetooth — is not
+        // trusted to have authored it. Check the tag before it enters the log.
+        val authentic = runCatching {
+            SharedBuysCrypto.recordTag(
+                record.device,
+                record.seq,
+                record.blob.fromBase64Url(),
+                relayAuthKey
+            ).contentEquals(record.tag.fromBase64Url())
+        }.getOrDefault(false)
+        if (!authentic) {
+            note("bad tag on $identifier")
+            return null
+        }
+        val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
+        val payload = runCatching {
+            val blob = record.blob.fromBase64Url()
+            val plaintext = SharedBuysCrypto.open(blob, contentKey, room, record.device, record.seq)
+            json.decodeFromString<SharedBuyPayload>(String(plaintext))
+        }.getOrNull()
+        if (payload == null) {
+            note("could not open $identifier")
+            return null
+        }
+        return SharedBuyChange(record.device, record.seq, payload)
+    }
+
+    /** Appends what was opened, re-checking against a log that may have moved meanwhile. */
+    private fun adopt(opened: List<SharedBuyChange>) {
+        if (opened.isEmpty()) return
         val known = changes.mapTo(mutableSetOf()) { it.id }
         var added = 0
-        for (record in records) {
-            val identifier = "${record.device}#${record.seq}"
-            if (known.contains(identifier)) continue
-            // Whoever handed us this record — the relay, or a peer over Bluetooth — is
-            // not trusted to have authored it. Check the tag before it enters the log.
-            val authentic = runCatching {
-                SharedBuysCrypto.recordTag(
-                    record.device,
-                    record.seq,
-                    record.blob.fromBase64Url(),
-                    relayAuthKey
-                ).contentEquals(record.tag.fromBase64Url())
-            }.getOrDefault(false)
-            if (!authentic) {
-                note("bad tag on $identifier")
-                continue
-            }
-            val payload = runCatching {
-                val blob = record.blob.fromBase64Url()
-                val plaintext =
-                    SharedBuysCrypto.open(blob, contentKey, room, record.device, record.seq)
-                json.decodeFromString<SharedBuyPayload>(String(plaintext))
-            }.getOrNull()
-            if (payload == null) {
-                note("could not open $identifier")
-                continue
-            }
-            changes.add(SharedBuyChange(record.device, record.seq, payload))
+        for (change in opened) {
             // A batch can carry the same record twice — a relay echo, or a want reply
             // overlapping the live stream — so the set has to grow as we append.
-            known.add(identifier)
+            if (!known.add(change.id)) continue
+            changes.add(change)
             // A Lamport clock. Without it a fresh device's seq 1 sorts under an
             // established peer's seq 30, and the older edit wins on every screen.
-            lastSeq = maxOf(lastSeq, record.seq)
+            lastSeq = maxOf(lastSeq, change.seq)
             added += 1
         }
         if (added > 0) {
+            invalidateFold()
             persist()
             bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
             note("received $added")
         }
     }
 
+    /**
+     * Snapshots the log and writes it away from the caller.
+     *
+     * Encoding every change and committing to SharedPreferences happened inline on
+     * whichever thread produced the change — a binder thread, for anything arriving over
+     * Bluetooth. The snapshot is taken here, where the state is consistent; the encode
+     * and the write happen on the IO dispatcher, serialised so two cannot land out of
+     * order.
+     */
     private fun persist() {
         val key = sessionKey ?: return
-        store.save(
-            SharedBuysSnapshot(
-                sessionKey = key.toBase64Url(),
-                deviceId = deviceId,
-                eventNumber = eventNumber,
-                lastSeq = lastSeq,
-                changes = changes.toList()
-            )
+        val snapshot = SharedBuysSnapshot(
+            sessionKey = key.toBase64Url(),
+            deviceId = deviceId,
+            eventNumber = eventNumber,
+            lastSeq = lastSeq,
+            changes = changes.toList()
         )
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            persistMutex.withLock { store.save(snapshot) }
+        }
     }
 
     private fun note(message: String) {
