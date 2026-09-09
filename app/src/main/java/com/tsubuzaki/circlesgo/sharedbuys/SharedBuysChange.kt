@@ -21,6 +21,15 @@ object SharedBuyKind {
      * status flips, which is what makes the list useful while walking a venue.
      */
     fun travelsOverBluetooth(kind: Int): Boolean = kind == SET_STATUS
+
+    /**
+     * Whether this build can interpret the kind at all.
+     *
+     * An unknown kind is folded as a no-op on both platforms. Without this it was parked
+     * in the deferred map instead, waiting for an addItem that would never make it
+     * applicable, and the map grew for the life of the session.
+     */
+    fun isKnown(kind: Int): Boolean = kind in ADD_ITEM..RENAME_ITEM
 }
 
 object SharedBuyStatus {
@@ -94,6 +103,7 @@ object SharedBuyFold {
                     deferred.remove(payload.itemId)?.forEach { apply(it, byId) }
                 }
                 payload.kind == SharedBuyKind.MEMBER_JOINED -> Unit
+                !SharedBuyKind.isKnown(payload.kind) -> Unit
                 !byId.containsKey(payload.itemId) ->
                     deferred.getOrPut(payload.itemId) { mutableListOf() }.add(change)
                 else -> apply(change, byId)

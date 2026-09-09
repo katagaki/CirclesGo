@@ -426,6 +426,11 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 note("failed: ${event.reason}")
                 scheduleReconnect()
             }
+            is RelayEvent.Closed -> {
+                status = "offline (closed ${event.code})"
+                note("closed ${event.code}")
+                scheduleReconnect()
+            }
         }
     }
 

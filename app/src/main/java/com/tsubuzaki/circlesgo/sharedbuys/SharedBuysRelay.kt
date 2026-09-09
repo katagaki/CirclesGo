@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.int
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -27,6 +27,16 @@ sealed interface RelayEvent {
     data object Connected : RelayEvent
     data class Records(val records: List<RelayRecord>) : RelayEvent
     data class Failed(val reason: String) : RelayEvent
+
+    /**
+     * The relay closed the socket cleanly.
+     *
+     * consumeEach returns normally on a close frame and runCatching succeeds, so a clean
+     * close used to fire no event at all: when the room's 48 hour alarm closed sockets
+     * with 1001, iOS reconnected and Android sat at "connected", dark, until the app was
+     * restarted.
+     */
+    data class Closed(val code: Int) : RelayEvent
 }
 
 class SharedBuysRelay(private val scope: CoroutineScope) {
@@ -55,6 +65,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                 socket.incoming.consumeEach { frame ->
                     if (frame is Frame.Text) handle(frame.readText(), onEvent)
                 }
+                onEvent(RelayEvent.Closed(socket.closeReason.await()?.code?.toInt() ?: 1006))
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
                     onEvent(RelayEvent.Failed(it.message ?: "socket error"))
@@ -138,13 +149,19 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         val frame = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return
         when ((frame["t"] as? JsonPrimitive)?.content) {
             "ops" -> {
+                // Parsed per record: a seq wider than Int used to throw out of the whole
+                // mapNotNull, unwind consumeEach and tear the socket down, rather than
+                // costing the one record that carried it.
                 val records = frame["o"]?.jsonArray.orEmpty().mapNotNull { element ->
-                    val entry = element.jsonObject
-                    val device = entry["d"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val seq = entry["n"]?.jsonPrimitive?.int?.toLong() ?: return@mapNotNull null
-                    val blob = entry["b"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    val tag = entry["a"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                    RelayRecord(device, seq, blob, tag)
+                    runCatching {
+                        val entry = element.jsonObject
+                        RelayRecord(
+                            entry["d"]?.jsonPrimitive?.content ?: return@runCatching null,
+                            entry["n"]?.jsonPrimitive?.long ?: return@runCatching null,
+                            entry["b"]?.jsonPrimitive?.content ?: return@runCatching null,
+                            entry["a"]?.jsonPrimitive?.content ?: return@runCatching null
+                        )
+                    }.getOrNull()
                 }
                 onEvent(RelayEvent.Records(records))
             }
