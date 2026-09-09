@@ -51,7 +51,9 @@ fun CircleDetailBuysSection(
     circleID: Int,
     eventNumber: Int,
     buysCache: BuysCache,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    circleName: String? = null,
+    circleSpace: String? = null
 ) {
     val buysVersion by buysCache.version.collectAsState()
     var items by remember { mutableStateOf<List<BuysCache.BuyItem>>(emptyList()) }
@@ -116,6 +118,8 @@ fun CircleDetailBuysSection(
                 key(draft.id) {
                     SharedBuyDraftRow(
                         circleID = circleID,
+                        circleName = circleName,
+                        circleSpace = circleSpace,
                         draft = draft,
                         onDelete = {
                             draft.itemId?.let { activeSession.remove(it, circleID) }

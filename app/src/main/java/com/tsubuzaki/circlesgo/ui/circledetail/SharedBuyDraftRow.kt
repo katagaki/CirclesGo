@@ -42,7 +42,13 @@ class SharedBuyDraft {
 fun SharedBuyDraftRow(
     circleID: Int,
     draft: SharedBuyDraft,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    /**
+     * The circle's name and space, relayed into the log alongside the first item from
+     * this circle so a guest -- who has no catalog database -- can still read the header.
+     */
+    circleName: String? = null,
+    circleSpace: String? = null
 ) {
     val session = LocalSharedBuys.current
     var name by remember { mutableStateOf("") }
@@ -57,7 +63,7 @@ fun SharedBuyDraftRow(
         val cost = costText.toIntOrNull() ?: 0
         val itemId = draft.itemId
         if (itemId == null) {
-            draft.itemId = session.addItem(trimmed, cost, circleID)
+            draft.itemId = session.addItem(trimmed, cost, circleID, circleName, circleSpace)
             syncedName = trimmed
             syncedCost = cost
         } else {

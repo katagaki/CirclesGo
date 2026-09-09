@@ -115,9 +115,17 @@ fun SharedBuysList(
 
         circleIDs.forEach { circleID ->
             item {
+                // The catalog is authoritative and current; the log is what a member
+                // without one has. Falling back to it is what keeps a guest's headers
+                // readable instead of "Unknown circle 12345".
+                val catalog = circlesByID[circleID]
+                val relayed = session.circles[circleID]
+                val name = catalog?.circleName
+                    ?: relayed?.name?.takeIf { it.isNotEmpty() }
+                    ?: stringResource(R.string.buys_unknown_circle, circleID)
+                val space = catalog?.spaceName() ?: relayed?.space
                 Text(
-                    text = circlesByID[circleID]?.circleName
-                        ?: stringResource(R.string.buys_unknown_circle, circleID),
+                    text = if (space != null) "$name  $space" else name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)

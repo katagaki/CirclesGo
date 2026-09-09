@@ -13,6 +13,18 @@ object SharedBuyKind {
     const val RENAME_ITEM = 6
 
     /**
+     * Circle name and space, relayed once per circle so a member without the catalog
+     * database can still read the list.
+     *
+     * A guest joins by scanning a code and never downloads the catalog, so
+     * database.circles() returns nothing and every section header would read
+     * "Unknown circle 12345". The contributor who first adds an item from a circle
+     * carries that circle's name and space into the log alongside it, so the guest
+     * reads the header off the log instead. Sent once per circle per room.
+     */
+    const val CIRCLE_INFO = 7
+
+    /**
      * Whether this kind is carried over the peer-to-peer Bluetooth path.
      *
      * Bluetooth frames are chunked at 160 bytes and reassembled by hand, so the
@@ -29,7 +41,7 @@ object SharedBuyKind {
      * in the deferred map instead, waiting for an addItem that would never make it
      * applicable, and the map grew for the life of the session.
      */
-    fun isKnown(kind: Int): Boolean = kind in ADD_ITEM..RENAME_ITEM
+    fun isKnown(kind: Int): Boolean = kind in ADD_ITEM..CIRCLE_INFO
 }
 
 object SharedBuyStatus {
@@ -51,7 +63,16 @@ data class SharedBuyPayload(
     @SerialName("i") val itemId: String,
     @SerialName("c") val circleId: Int,
     @SerialName("t") val text: String? = null,
-    @SerialName("v") val value: Int? = null
+    @SerialName("v") val value: Int? = null,
+    /**
+     * The circle's space, as spaceName() renders it. Only CIRCLE_INFO sets it.
+     *
+     * A separate field rather than a delimiter inside text: a circle name is
+     * user-supplied and may contain anything, so any separator would eventually be part
+     * of a name. Optional, so it costs nothing on the other six kinds -- explicitNulls
+     * is off, so nil is omitted rather than encoded as null.
+     */
+    @SerialName("s") val space: String? = null
 )
 
 @Serializable
@@ -62,6 +83,13 @@ data class SharedBuyChange(
 ) {
     val id: String get() = "$device#$seq"
 }
+
+/** A circle as the shared log describes it, for a member who cannot look it up. */
+data class SharedBuyCircle(
+    val id: Int,
+    val name: String,
+    val space: String?
+)
 
 data class SharedBuyItem(
     val id: String,
@@ -102,7 +130,10 @@ object SharedBuyFold {
                     // whatever was parked on this item, in the same order it was folded.
                     deferred.remove(payload.itemId)?.forEach { apply(it, byId) }
                 }
+                // Log metadata, not an item mutation. Without this they fall through to
+                // the deferred branch and are parked against an itemId that never arrives.
                 payload.kind == SharedBuyKind.MEMBER_JOINED -> Unit
+                payload.kind == SharedBuyKind.CIRCLE_INFO -> Unit
                 !SharedBuyKind.isKnown(payload.kind) -> Unit
                 !byId.containsKey(payload.itemId) ->
                     deferred.getOrPut(payload.itemId) { mutableListOf() }.add(change)
@@ -129,6 +160,26 @@ object SharedBuyFold {
             SharedBuyKind.REMOVE_ITEM -> current.copy(isRemoved = true)
             else -> return
         }
+    }
+
+    /**
+     * Circle name and space per circle ID, as the log carries them.
+     *
+     * Only ever a fallback for a member holding the catalog database, which is both
+     * richer and current; for a guest it is the only source there is.
+     */
+    fun circles(changes: List<SharedBuyChange>): Map<Int, SharedBuyCircle> {
+        val result = mutableMapOf<Int, SharedBuyCircle>()
+        for (change in changes.sortedWith(compareBy({ it.seq }, { it.device }))) {
+            if (change.payload.kind == SharedBuyKind.CIRCLE_INFO) {
+                result[change.payload.circleId] = SharedBuyCircle(
+                    id = change.payload.circleId,
+                    name = change.payload.text.orEmpty(),
+                    space = change.payload.space
+                )
+            }
+        }
+        return result
     }
 
     fun members(changes: List<SharedBuyChange>): Map<Int, String> {

@@ -25,6 +25,18 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     var relayBaseUrl by mutableStateOf("ws://10.0.2.2:8787")
     var actorPid by mutableStateOf(0)
     var nickname by mutableStateOf("")
+
+    /**
+     * Whether this device is running as a guest.
+     *
+     * A guest has no circle.ms account and no catalog database: they scanned a room code
+     * to help tick things off, and that is all they can do. append() honours this by
+     * dropping every kind but a status flip. It is not enforceable -- a guest holds the
+     * room key, so a modified client could write anything the relay accepts -- it is this
+     * app keeping to the role it advertised.
+     */
+    var isGuest by mutableStateOf(false)
+        private set
     var isDebugVisible by mutableStateOf(false)
     var bluetoothPeers by mutableStateOf(0)
         private set
@@ -62,6 +74,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private var cachedItemsVersion = -1
     private var cachedMembers: Map<Int, String> = emptyMap()
     private var cachedMembersVersion = -1
+    private var cachedCircles: Map<Int, SharedBuyCircle> = emptyMap()
+    private var cachedCirclesVersion = -1
 
     private fun invalidateFold() {
         foldVersion += 1
@@ -95,6 +109,21 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 cachedMembersVersion = version
             }
             return cachedMembers
+        }
+
+    /**
+     * Circle name and space as the log carries them, for a member with no catalog.
+     *
+     * Read per section header, so it is cached on foldVersion like items and members.
+     */
+    val circles: Map<Int, SharedBuyCircle>
+        get() {
+            val version = foldVersion
+            if (cachedCirclesVersion != version) {
+                cachedCircles = SharedBuyFold.circles(changes)
+                cachedCirclesVersion = version
+            }
+            return cachedCircles
         }
 
     val joinUrl: String?
@@ -155,11 +184,56 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     fun adoptIdentity() {
         val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+        isGuest = preferences.getBoolean(GUEST_MODE_KEY, false)
+        // A guest has no circle.ms identity to adopt, and the WebCatalog nickname of
+        // whoever used this phone before them is not theirs to wear.
+        if (isGuest) {
+            actorPid = localActorId()
+            nickname = guestNickname()
+            return
+        }
         val storedPid = preferences.getInt("My.LastKnownPID", 0)
         val storedNickname = preferences.getString("My.LastKnownNickname", null)
         actorPid = if (storedPid != 0) storedPid else localActorId()
         if (!storedNickname.isNullOrEmpty()) nickname = storedNickname
         if (nickname.isEmpty()) nickname = context.getString(R.string.buys_shared_you)
+    }
+
+    /**
+     * The guest's minted name, kept so the same phone is the same member across
+     * relaunches and across rooms.
+     */
+    private fun guestNickname(): String {
+        val preferences = context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+        val existing = preferences.getString(GUEST_NICKNAME_KEY, null)
+        if (!existing.isNullOrEmpty()) return existing
+        val minted = SharedBuysGuestName.generate()
+        preferences.edit().putString(GUEST_NICKNAME_KEY, minted).apply()
+        return minted
+    }
+
+    /**
+     * Enters Guest Mode. Survives relaunch, so the app comes back into the guest shell
+     * rather than the login screen.
+     */
+    fun enterGuestMode() {
+        context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+            .edit().putBoolean(GUEST_MODE_KEY, true).apply()
+        adoptIdentity()
+    }
+
+    /**
+     * Leaves Guest Mode and the room with it.
+     *
+     * The minted name is dropped too: coming back as a guest later is a new session with
+     * a new member, not a resumption of the old one.
+     */
+    fun exitGuestMode() {
+        leave()
+        context.getSharedPreferences("circles", Context.MODE_PRIVATE)
+            .edit().remove(GUEST_MODE_KEY).remove(GUEST_NICKNAME_KEY).apply()
+        isGuest = false
+        nickname = ""
     }
 
     /**
@@ -432,8 +506,26 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         )
     }
 
-    fun addItem(name: String, cost: Int, circleId: Int): String {
+    /**
+     * Adds an item, carrying the circle's identity into the log the first time that
+     * circle appears in the room.
+     *
+     * circleName and circleSpace come from the caller's catalog database, which a guest
+     * does not have. Relayed once per circle rather than per item: the check is against
+     * the folded circle map, so it is idempotent across a restore and a second
+     * contributor adding from a circle someone else already introduced.
+     */
+    fun addItem(
+        name: String,
+        cost: Int,
+        circleId: Int,
+        circleName: String? = null,
+        circleSpace: String? = null
+    ): String {
         val itemId = UUID.randomUUID().toString().take(8)
+        if (!circleName.isNullOrEmpty() && circles[circleId] == null) {
+            append(SharedBuyKind.CIRCLE_INFO, "-", circleId, circleName, null, circleSpace)
+        }
         append(SharedBuyKind.ADD_ITEM, itemId, circleId, name, cost)
         append(SharedBuyKind.SET_ASSIGNEE, itemId, circleId, null, actorPid)
         return itemId
@@ -455,14 +547,28 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         append(SharedBuyKind.SET_STATUS, item.id, item.circleId, null, SharedBuyStatus.next(item.status))
     }
 
-    private fun append(kind: Int, itemId: String, circleId: Int, text: String?, value: Int?) {
+    private fun append(
+        kind: Int,
+        itemId: String,
+        circleId: Int,
+        text: String?,
+        value: Int?,
+        space: String? = null
+    ) {
         val key = sessionKey ?: return
         val room = roomId ?: return
+        // A guest holds the room key and could append anything the relay would accept.
+        // The restriction is the app honouring its own role, not something the log can
+        // enforce -- see isGuest. MEMBER_JOINED is how a guest appears in the members
+        // list at all, so it is allowed alongside the status flips they are here for.
+        if (isGuest && kind != SharedBuyKind.SET_STATUS && kind != SharedBuyKind.MEMBER_JOINED) {
+            return
+        }
         lastSeq += 1
         val change = SharedBuyChange(
             device = deviceId,
             seq = lastSeq,
-            payload = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value)
+            payload = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value, space)
         )
         changes.add(change)
         invalidateFold()
@@ -664,6 +770,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     }
 
     companion object {
+        const val GUEST_MODE_KEY = "Guest.IsActive"
+        private const val GUEST_NICKNAME_KEY = "Guest.Nickname"
+
         /** The relay refuses a frame carrying more than this (MAX_RECORDS_PER_FRAME). */
         private const val RECORDS_PER_FRAME = 32
 

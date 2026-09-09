@@ -449,6 +449,8 @@ fun CircleDetailView(
         if (buysCache != null && events != null) {
             CircleDetailBuysSection(
                 circleID = circle.id,
+                circleName = circle.circleName,
+                circleSpace = circle.spaceName(),
                 eventNumber = events.activeEventNumber,
                 buysCache = buysCache,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
