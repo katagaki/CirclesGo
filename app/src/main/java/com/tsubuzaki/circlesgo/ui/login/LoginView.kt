@@ -40,11 +40,6 @@ import com.tsubuzaki.circlesgo.R
 fun LoginView(
     authURL: String,
     onLoginTapped: () -> Unit = {},
-    /**
-     * Guest Mode took the second button over from demo mode. Demo mode itself is still
-     * here -- DemoState, DemoData and the branch in MainActivity are untouched -- it just
-     * has no way in from this screen any more.
-     */
     onGuestTapped: () -> Unit = {}
 ) {
     val context = LocalContext.current

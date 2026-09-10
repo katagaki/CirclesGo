@@ -59,10 +59,6 @@ import com.tsubuzaki.circlesgo.state.UserSelections
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * Purchase planning tab, mirroring the iOS Buys tab: planned items grouped by
- * circle, filtered by the selected day, with a running total and grand total.
- */
 @Composable
 fun BuysView(
     database: CatalogDatabase,
@@ -118,7 +114,6 @@ fun BuysView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Info button and scope tabs share a single row with one background
         Surface(color = MaterialTheme.colorScheme.surface) {
             Column {
                 Row(
@@ -316,7 +311,6 @@ private fun BuysEntryCard(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Circle header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -341,7 +335,6 @@ private fun BuysEntryCard(
                 }
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            // Items
             for (item in entry.items.filter { it.name.isNotBlank() }.sortedBy { it.sortOrder }) {
                 Row(
                     modifier = Modifier

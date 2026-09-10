@@ -31,8 +31,6 @@ import java.util.UUID
 
 sealed interface BluetoothEvent {
     data class PeerCount(val count: Int) : BluetoothEvent
-
-    /** A peer finished the handshake, carrying the digest it advertised if we scanned it. */
     data class PeerVerified(val digest: ByteArray?) : BluetoothEvent
     data class Payload(val bytes: ByteArray) : BluetoothEvent
     data class Unavailable(val reason: String) : BluetoothEvent

@@ -28,14 +28,6 @@ import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysSession
 import java.util.Locale
 
-/**
- * UnifiedMoreMenu with everything a guest cannot reach taken out.
- *
- * Gone: the event database screen, every map and circle display toggle, and sign-out --
- * all of them act on a catalog or a circle.ms login a guest does not have. What survives
- * is what works with no account at all: the public Comiket links, and the way back out of
- * Guest Mode.
- */
 @Composable
 fun GuestMoreMenu(session: SharedBuysSession, onScan: () -> Unit) {
     val context = LocalContext.current

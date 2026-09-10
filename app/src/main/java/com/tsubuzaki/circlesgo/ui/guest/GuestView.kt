@@ -37,14 +37,6 @@ import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysScanner
 import com.tsubuzaki.circlesgo.sharedbuys.SharedBuysSession
 import com.tsubuzaki.circlesgo.ui.sharedbuys.SharedBuyRow
 
-/**
- * The whole app, for someone who is not signed in.
- *
- * A guest has no catalog database, so there is no map to show, nothing to browse and no
- * favourites -- every other destination would be empty. What is left is the one thing they
- * came for: the shared list they scanned into, and the ability to tick items off it. The
- * bottom sheet goes with the rest, since there is nothing to switch between.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GuestView(session: SharedBuysSession) {
@@ -161,8 +153,6 @@ private fun JoinedList(session: SharedBuysSession, onLeave: () -> Unit) {
         }
         circleIDs.forEach { circleID ->
             item {
-                // The only description of a circle a guest will ever have is the one the
-                // contributor relayed into the log when they added the item.
                 val relayed = session.circles[circleID]
                 val name = relayed?.name?.takeIf { it.isNotEmpty() }
                     ?: stringResource(R.string.buys_unknown_circle, circleID)

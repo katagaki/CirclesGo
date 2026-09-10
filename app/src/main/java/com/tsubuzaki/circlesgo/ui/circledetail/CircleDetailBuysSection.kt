@@ -42,10 +42,6 @@ import com.tsubuzaki.circlesgo.R
 import com.tsubuzaki.circlesgo.data.local.BuysCache
 import com.tsubuzaki.circlesgo.ui.shared.LocalSharedBuys
 
-/**
- * Buys editor inside the circle detail view: add items, rename them, set
- * their cost, cycle their status, and delete them.
- */
 @Composable
 fun CircleDetailBuysSection(
     circleID: Int,
@@ -130,7 +126,6 @@ fun CircleDetailBuysSection(
             }
         }
 
-        // Add item button
         Row(
             modifier = Modifier
                 .fillMaxWidth()

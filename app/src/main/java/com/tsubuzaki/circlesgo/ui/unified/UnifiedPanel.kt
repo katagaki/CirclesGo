@@ -74,7 +74,6 @@ fun UnifiedPanel(
         }
     }
 
-    // Check if circle detail is showing (in sheet path stack)
     val isShowingCircleDetail =
         sheetPath.lastOrNull() == UnifiedPath.CIRCLE_DETAIL && selectedCircle != null
 
@@ -83,7 +82,6 @@ fun UnifiedPanel(
             .fillMaxSize()
     ) {
         if (isShowingCircleDetail) {
-            // Circle detail view (pushed on top)
             CircleDetailView(
                 initialCircle = selectedCircle!!,
                 database = database,
@@ -101,7 +99,6 @@ fun UnifiedPanel(
                 visibleHeight = visibleHeight
             )
         } else {
-            // Tab row: Circles / Favorites (latest event only) / Buys
             val tabs = if (isActiveEventLatest) {
                 listOf(UnifiedPath.CIRCLES, UnifiedPath.FAVORITES, UnifiedPath.BUYS)
             } else {
@@ -149,7 +146,6 @@ fun UnifiedPanel(
                     }
                 }
 
-                // Content based on current path
                 when (currentPath) {
                     UnifiedPath.FAVORITES -> FavoritesView(
                         database = database,
@@ -168,7 +164,6 @@ fun UnifiedPanel(
                         unifier = unifier
                     )
 
-                    // CIRCLES and any unhandled path
                     else -> CatalogView(
                         database = database,
                         selections = selections,
