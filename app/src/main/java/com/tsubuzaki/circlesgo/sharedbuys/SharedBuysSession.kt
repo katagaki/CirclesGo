@@ -22,7 +22,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     var status by mutableStateOf("idle")
         private set
-    var relayBaseUrl by mutableStateOf("ws://10.0.2.2:8787")
+    var relayBaseUrl by mutableStateOf(SharedBuysRelays.baseUrl(context))
     var actorPid by mutableStateOf(0)
     var nickname by mutableStateOf("")
 
