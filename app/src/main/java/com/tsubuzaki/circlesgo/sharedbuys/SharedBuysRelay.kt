@@ -45,6 +45,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         val baseUrl: String,
         val roomId: String,
         val deviceId: String,
+        val deviceAuthKey: ByteArray,
         val sessionKey: ByteArray,
         val vector: Map<String, Long>,
         val pushToken: String? = null
@@ -145,6 +146,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         )
         val timestamp = System.currentTimeMillis() / 1000
         val tag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, relayAuthKey)
+        val deviceTag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, endpoint.deviceAuthKey)
         return buildJsonObject {
             put("t", "hello")
             put("d", endpoint.deviceId)
@@ -154,6 +156,8 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
             if (allowsKeyUpload(endpoint.baseUrl)) put("k", relayAuthKey.toBase64Url())
             put("ts", timestamp)
             put("a", tag.toBase64Url())
+            put("x", endpoint.deviceAuthKey.toBase64Url())
+            put("da", deviceTag.toBase64Url())
             endpoint.pushToken?.let { token ->
                 put("p", buildJsonObject {
                     put("pl", "fcm")

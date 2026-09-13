@@ -52,6 +52,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         private set
     var deviceId by mutableStateOf("")
         private set
+    private var deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
     private var eventNumber = 0
     private var lastSeq = 0L
     private var reconnectAttempt = 0
@@ -262,6 +263,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val snapshot = store.load() ?: return
         sessionKey = snapshot.sessionKey.fromBase64Url()
         deviceId = snapshot.deviceId
+        deviceAuthKey = snapshot.deviceAuthKey?.fromBase64Url() ?: SharedBuysCrypto.newDeviceAuthKey()
         eventNumber = snapshot.eventNumber
         lastSeq = snapshot.lastSeq
         changes.clear()
@@ -307,6 +309,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     fun start(eventNumber: Int, nickname: String) {
         sessionKey = SharedBuysCrypto.newSessionKey()
         deviceId = SharedBuysCrypto.newDeviceId()
+        deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         this.eventNumber = eventNumber
         lastSeq = 0
         changes.clear()
@@ -327,6 +330,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         if (isActive) leave()
         sessionKey = key
         deviceId = SharedBuysCrypto.newDeviceId()
+        deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         eventNumber = uri.getQueryParameter("e")?.toIntOrNull() ?: 0
         lastSeq = 0
         changes.clear()
@@ -350,6 +354,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         bluetoothPeers = 0
         relay.disconnect()
         sessionKey = null
+        deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         changes.clear()
         invalidateFold()
         lastSeq = 0
@@ -373,6 +378,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 relayBaseUrl,
                 room,
                 deviceId,
+                deviceAuthKey,
                 key,
                 versionVector,
                 SharedBuysPush.token(context)
@@ -785,6 +791,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val snapshot = SharedBuysSnapshot(
             sessionKey = key.toBase64Url(),
             deviceId = deviceId,
+            deviceAuthKey = deviceAuthKey.toBase64Url(),
             eventNumber = eventNumber,
             lastSeq = lastSeq,
             changes = changes.toList()

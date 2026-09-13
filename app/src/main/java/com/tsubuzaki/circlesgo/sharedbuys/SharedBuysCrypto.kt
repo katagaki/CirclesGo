@@ -22,6 +22,8 @@ object SharedBuysCrypto {
 
     fun newDeviceId(): String = ByteArray(4).also { random.nextBytes(it) }.toHex()
 
+    fun newDeviceAuthKey(): ByteArray = ByteArray(32).also { random.nextBytes(it) }
+
     fun roomId(sessionKey: ByteArray): String =
         hmac(sessionKey, TOPIC_INFO.toByteArray()).copyOf(16).toHex()
 
