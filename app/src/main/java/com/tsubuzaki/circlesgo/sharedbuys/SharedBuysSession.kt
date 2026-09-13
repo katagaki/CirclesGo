@@ -656,7 +656,6 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         if (!isActive || reconnectJob != null) return
         if (bluetoothPeers > 0) {
             note("holding off, bluetooth is carrying")
-            return
         }
         reconnectAttempt = minOf(reconnectAttempt + 1, 6)
         val delayMs = (minOf(Math.pow(2.0, reconnectAttempt.toDouble()), 30.0) * 1000).toLong() +
@@ -665,7 +664,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         reconnectJob = scope.launch {
             kotlinx.coroutines.delay(delayMs)
             reconnectJob = null
-            if (isActive && bluetoothPeers == 0) connect()
+            if (!isActive) return@launch
+            if (bluetoothPeers == 0) connect() else scheduleReconnect()
         }
     }
 
