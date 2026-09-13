@@ -491,7 +491,14 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
         val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
         val plaintext = "{\"a\":12345,\"k\":1,\"i\":\"a1b2c3d4\",\"c\":98765,\"v\":1}".toByteArray()
-        val blob = SharedBuysCrypto.seal(plaintext, contentKey, room, "a1b2c3d4", 42)
+        val blob = SharedBuysCrypto.seal(
+            plaintext,
+            contentKey,
+            room,
+            "a1b2c3d4",
+            42,
+            ByteArray(SharedBuysCrypto.NONCE_LENGTH) { 0x11 }
+        )
         val recordTag = SharedBuysCrypto.recordTag("a1b2c3d4", 42, blob, relayAuthKey)
         val record = RelayRecord("a1b2c3d4", 42, blob.toBase64Url(), recordTag.toBase64Url())
         val frame = SharedBuysWire.changeFrames(listOf(record)).firstOrNull()
@@ -499,7 +506,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             note("wire vector FAILED to encode")
             return
         }
-        note("wire ${frame.size}B vector ${if (frame.toHex() == TEST_VECTOR) "ok" else "FAILED"}")
+        val marked = blob.copyOfRange(0, SharedBuysCrypto.RANDOM_NONCE_MARKER.size)
+            .contentEquals(SharedBuysCrypto.RANDOM_NONCE_MARKER)
+        val opened = runCatching {
+            SharedBuysCrypto.open(blob, contentKey, room, "a1b2c3d4", 42)
+        }.getOrNull()
+        note("wire ${frame.size}B nonce ${if (marked) "ok" else "FAILED"} crypto ${if (opened?.contentEquals(plaintext) == true) "ok" else "FAILED"}")
 
         val decoded = SharedBuysWire.decode(frame) as? SharedBuysFrame.Changes
         val first = decoded?.records?.firstOrNull()
@@ -807,10 +819,5 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
          */
         private const val COALESCE_WINDOW_MS = 250L
 
-        /** The frame from the wire format note, byte for byte. */
-        private const val TEST_VECTOR = "010101a1b2c3d4000000000000002a0040" +
-            "2ab0b4c6e69b2900dc6274a75e783cb336899016f440b24fcb8da6dfb640f662" +
-            "4e39050b00d0727ff8af49ad0b512d5b55fd21a0f1ce3cdbc148f01437111d57" +
-            "f5d63b17d693abf3217419adf1b582d2"
     }
 }

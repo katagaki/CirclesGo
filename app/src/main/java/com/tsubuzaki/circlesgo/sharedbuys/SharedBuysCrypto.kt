@@ -13,6 +13,8 @@ object SharedBuysCrypto {
     const val OPS_INFO = "circles-buys/v1/ops"
     const val RELAY_AUTH_INFO = "circles-buys/v1/relay-auth"
     const val TAG_LENGTH = 16
+    const val NONCE_LENGTH = 12
+    val RANDOM_NONCE_MARKER = byteArrayOf(0x53, 0x42, 0x32, 0x00)
 
     private val random = SecureRandom()
 
@@ -56,16 +58,19 @@ object SharedBuysCrypto {
         contentKey: ByteArray,
         roomId: String,
         deviceId: String,
-        seq: Long
+        seq: Long,
+        suppliedNonce: ByteArray? = null
     ): ByteArray {
+        val nonce = suppliedNonce ?: ByteArray(NONCE_LENGTH).also { random.nextBytes(it) }
+        require(nonce.size == NONCE_LENGTH)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(
             Cipher.ENCRYPT_MODE,
             SecretKeySpec(contentKey, "AES"),
-            GCMParameterSpec(128, nonce(deviceId, seq))
+            GCMParameterSpec(128, nonce)
         )
         cipher.updateAAD(associatedData(roomId, deviceId, seq))
-        return cipher.doFinal(plaintext)
+        return RANDOM_NONCE_MARKER + nonce + cipher.doFinal(plaintext)
     }
 
     fun open(
@@ -75,17 +80,25 @@ object SharedBuysCrypto {
         deviceId: String,
         seq: Long
     ): ByteArray {
+        val marked = blob.size > RANDOM_NONCE_MARKER.size + NONCE_LENGTH + TAG_LENGTH &&
+            blob.copyOfRange(0, RANDOM_NONCE_MARKER.size).contentEquals(RANDOM_NONCE_MARKER)
+        val nonce = if (marked) {
+            blob.copyOfRange(RANDOM_NONCE_MARKER.size, RANDOM_NONCE_MARKER.size + NONCE_LENGTH)
+        } else {
+            legacyNonce(deviceId, seq)
+        }
+        val sealed = if (marked) blob.copyOfRange(RANDOM_NONCE_MARKER.size + NONCE_LENGTH, blob.size) else blob
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(
             Cipher.DECRYPT_MODE,
             SecretKeySpec(contentKey, "AES"),
-            GCMParameterSpec(128, nonce(deviceId, seq))
+            GCMParameterSpec(128, nonce)
         )
         cipher.updateAAD(associatedData(roomId, deviceId, seq))
-        return cipher.doFinal(blob)
+        return cipher.doFinal(sealed)
     }
 
-    private fun nonce(deviceId: String, seq: Long): ByteArray =
+    private fun legacyNonce(deviceId: String, seq: Long): ByteArray =
         ByteBuffer.allocate(12).put(deviceId.fromHex()).putLong(seq).array()
 
     private fun associatedData(roomId: String, deviceId: String, seq: Long): ByteArray =
