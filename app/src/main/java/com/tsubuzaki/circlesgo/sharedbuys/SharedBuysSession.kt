@@ -698,9 +698,13 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private fun resend() {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        changes.filter { it.device == deviceId }.chunked(RECORDS_PER_FRAME).forEach { page ->
-            val records = page.mapNotNull { seal(it, key, room) }
-            if (records.isNotEmpty()) relay.send(records) { event -> handle(event) }
+        val pages = changes.filter { it.device == deviceId }.chunked(RECORDS_PER_FRAME)
+        scope.launch {
+            pages.forEachIndexed { index, page ->
+                val records = page.mapNotNull { seal(it, key, room) }
+                if (records.isNotEmpty()) relay.send(records) { event -> handle(event) }
+                if (index < pages.lastIndex) kotlinx.coroutines.delay(RESEND_PAGE_DELAY_MS)
+            }
         }
     }
 
@@ -825,6 +829,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
          * collapses a burst of typing into one frame.
          */
         private const val COALESCE_WINDOW_MS = 250L
+        private const val RESEND_PAGE_DELAY_MS = 600L
 
     }
 }
