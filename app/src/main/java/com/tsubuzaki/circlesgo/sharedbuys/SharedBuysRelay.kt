@@ -64,9 +64,27 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                 session = socket
                 socket.send(Frame.Text(helloFrame(endpoint)))
                 onEvent(RelayEvent.Connected)
-                socket.incoming.consumeEach { frame ->
-                    if (frame is Frame.Text) handle(frame.readText(), onEvent)
+                var lastPongAt = 0L
+                val heartbeat = launch {
+                    while (true) {
+                        kotlinx.coroutines.delay(HEARTBEAT_INTERVAL_MS)
+                        val sentAt = System.currentTimeMillis()
+                        socket.send(Frame.Text("ping"))
+                        kotlinx.coroutines.delay(HEARTBEAT_TIMEOUT_MS)
+                        if (lastPongAt < sentAt) {
+                            socket.close()
+                            return@launch
+                        }
+                    }
                 }
+                socket.incoming.consumeEach { frame ->
+                    if (frame is Frame.Text) {
+                        val text = frame.readText()
+                        if (text == "pong") lastPongAt = System.currentTimeMillis()
+                        else handle(text, onEvent)
+                    }
+                }
+                heartbeat.cancel()
                 onEvent(RelayEvent.Closed(socket.closeReason.await()?.code?.toInt() ?: 1006))
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
@@ -195,5 +213,8 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
 private fun List<kotlinx.serialization.json.JsonElement>?.orEmpty() =
     this ?: emptyList()
 
-private fun JsonObject.stringOrNull(key: String): String? =
+    private fun JsonObject.stringOrNull(key: String): String? =
     (this[key] as? JsonPrimitive)?.content
+
+private const val HEARTBEAT_INTERVAL_MS = 240_000L
+private const val HEARTBEAT_TIMEOUT_MS = 30_000L
