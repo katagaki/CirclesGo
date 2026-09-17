@@ -191,9 +191,9 @@
     <string name="buys_scope_mine">自分</string>
     <string name="buys_scope_shared">共同購入</string>
     <string name="buys_shared_only_you">まだあなただけです</string>
-    <string name="buys_shared_with">%1$sと共有中</string>
-    <string name="buys_shared_with_two">%1$s・%2$sと共有中</string>
-    <string name="buys_shared_with_others">他%1$d人と共有中</string>
+    <string name="buys_shared_with">%1$sが参加中</string>
+    <string name="buys_shared_with_two">%1$s・%2$sが参加中</string>
+    <string name="buys_shared_with_others">他%1$d人が参加中</string>
     <string name="buys_shared_start">共同購入リストを作成</string>
     <string name="buys_shared_explain">自分の宝物リストは非公開のままです。共同購入リストは、参加者全員が見て編集できる別のリストです。</string>
     <string name="buys_shared_not_started">共同購入リストがありません</string>
