@@ -150,20 +150,6 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         get() = contiguousPrefix(changes)
 
     /**
-     * The same prefix, over the subset Bluetooth carries.
-     *
-     * The full vector counts relay-only changes, so advertising it to a peer would
-     * claim we hold status flips whose sequence numbers sit below a name or cost we
-     * happened to receive over the relay. The peer would then filter those flips out
-     * of its reply and they would never arrive. The peer-to-peer path has to reason
-     * about its own subset of the log.
-     */
-    private val bluetoothVersionVector: Map<String, Long>
-        get() = contiguousPrefix(
-            changes.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
-        )
-
-    /**
      * What the advertised digest summarises: everything held over Bluetooth, gaps and
      * all.
      *
@@ -428,8 +414,17 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         sendWant()
     }
 
+    /**
+     * Asks the peer for the status flips we lack.
+     *
+     * The vector is the gapless prefix of the whole log, not of the Bluetooth subset: a
+     * device's first change is always MEMBER_JOINED, which never travels over Bluetooth,
+     * so the subset's prefix was empty for everyone and no want was ever sent. A prefix
+     * over the whole log is honest — holding every change up to n includes every status
+     * flip up to n — and anything above a hole comes again and is deduped on ingest.
+     */
     private fun sendWant() {
-        SharedBuysWire.wantFrames(bluetoothVersionVector).forEach { bluetooth.send(it) }
+        SharedBuysWire.wantFrames(versionVector).forEach { bluetooth.send(it) }
     }
 
     private fun handleBluetooth(payload: ByteArray) {

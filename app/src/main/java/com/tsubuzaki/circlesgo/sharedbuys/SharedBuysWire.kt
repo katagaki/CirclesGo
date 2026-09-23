@@ -27,7 +27,12 @@ object SharedBuysWire {
     fun changeFrames(records: List<RelayRecord>): List<ByteArray> =
         pack(records.mapNotNull { body(it) }, CHANGES_TYPE)
 
-    /** Frames holding the version vector, packed so each one still fits a single chunk. */
+    /**
+     * Frames holding the version vector, packed so each one still fits a single chunk.
+     *
+     * An empty vector is still one frame, count 0, meaning "send me everything": packing
+     * nothing produced no frame at all, and a peer holding nothing never asked.
+     */
     fun wantFrames(vector: Map<String, Long>): List<ByteArray> {
         val bodies = vector.entries.sortedBy { it.key }.mapNotNull { entry ->
             val device = runCatching { entry.key.fromHex() }.getOrNull()
@@ -37,6 +42,7 @@ object SharedBuysWire {
                 ByteBuffer.allocate(WANT_ENTRY_LENGTH).put(device).putLong(entry.value).array()
             }
         }
+        if (bodies.isEmpty()) return listOf(byteArrayOf(VERSION, WANT_TYPE, 0))
         return pack(bodies, WANT_TYPE)
     }
 
