@@ -9,7 +9,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -58,7 +57,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private var reconnectAttempt = 0
     private var reconnectJob: kotlinx.coroutines.Job? = null
     private val outbox = mutableListOf<RelayRecord>()
-    private val persistMutex = kotlinx.coroutines.sync.Mutex()
+    private var pendingWrite: PendingWrite? = null
+    private var writeJob: kotlinx.coroutines.Job? = null
     private var flushJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
@@ -359,7 +359,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         invalidateFold()
         lastSeq = 0
         status = "idle"
-        store.clear()
+        submit(PendingWrite.CLEAR)
         SharedBuysLiveUpdateService.stop(context)
         note("left session")
     }
@@ -785,18 +785,41 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
     }
 
+    private enum class PendingWrite { SAVE, CLEAR }
+
     /**
-     * Snapshots the log and writes it away from the caller.
+     * Marks the session as needing a save.
      *
-     * Encoding every change and committing to SharedPreferences happened inline on
-     * whichever thread produced the change — a binder thread, for anything arriving over
-     * Bluetooth. The snapshot is taken here, where the state is consistent; the encode
-     * and the write happen on the IO dispatcher, serialised so two cannot land out of
-     * order.
+     * One writer drains the latest request, so saves can neither land out of order — an
+     * older snapshot overwriting a newer one rolled lastSeq back, and the next change
+     * reused a sequence number the relay already held — nor outlive a leave() and bring
+     * the room back on the next launch. A burst of changes collapses into one write, and
+     * the snapshot is taken when the write starts, not per change.
      */
     private fun persist() {
-        val key = sessionKey ?: return
-        val snapshot = SharedBuysSnapshot(
+        if (sessionKey == null) return
+        submit(PendingWrite.SAVE)
+    }
+
+    private fun submit(write: PendingWrite) {
+        pendingWrite = write
+        if (writeJob != null) return
+        writeJob = scope.launch {
+            while (true) {
+                val next = pendingWrite ?: break
+                pendingWrite = null
+                val snapshot = if (next == PendingWrite.SAVE) snapshot() ?: continue else null
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    if (snapshot != null) store.save(snapshot) else store.clear()
+                }
+            }
+            writeJob = null
+        }
+    }
+
+    private fun snapshot(): SharedBuysSnapshot? {
+        val key = sessionKey ?: return null
+        return SharedBuysSnapshot(
             sessionKey = key.toBase64Url(),
             deviceId = deviceId,
             deviceAuthKey = deviceAuthKey.toBase64Url(),
@@ -804,9 +827,6 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             lastSeq = lastSeq,
             changes = changes.toList()
         )
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            persistMutex.withLock { store.save(snapshot) }
-        }
     }
 
     private fun note(message: String) {
