@@ -38,6 +38,7 @@ sealed interface BluetoothEvent {
 
 private const val MTU = 247
 private const val REFRESH_INTERVAL_MS = 30_000L
+private const val MAX_PENDING_RESPONSES = 16
 private val CLIENT_CONFIG_UUID: UUID =
     UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -69,6 +70,11 @@ class SharedBuysBluetooth(private val context: Context) {
     private var advertisedWindow: Long? = null
 
     private var sessionKey: ByteArray? = null
+    private var handshakeKey: ByteArray? = null
+    /** The challenge we sent each peripheral, until it answers. */
+    private val challenges = mutableMapOf<String, ByteArray>()
+    /** The challenge each central sent us and the nonce we answered with, until it confirms. */
+    private val responses = mutableMapOf<String, Pair<ByteArray, ByteArray>>()
     private var digest: ByteArray = ByteArray(4)
     private var onEvent: ((BluetoothEvent) -> Unit)? = null
     private var messageCounter: Byte = 0
@@ -92,6 +98,7 @@ class SharedBuysBluetooth(private val context: Context) {
 
     fun start(sessionKey: ByteArray, digest: ByteArray, onEvent: (BluetoothEvent) -> Unit) {
         this.sessionKey = sessionKey
+        this.handshakeKey = SharedBuysHandshake.key(sessionKey)
         this.digest = digest
         this.onEvent = onEvent
 
@@ -130,9 +137,12 @@ class SharedBuysBluetooth(private val context: Context) {
         writeQueues.clear()
         writing.clear()
         peerDigests.clear()
+        challenges.clear()
+        responses.clear()
         runCatching { server?.close() }
         server = null
         sessionKey = null
+        handshakeKey = null
         onEvent = null
     }
 
@@ -345,6 +355,42 @@ class SharedBuysBluetooth(private val context: Context) {
         if (Looper.myLooper() == Looper.getMainLooper()) work() else handler.post(work)
     }
 
+    /**
+     * The peripheral half of the handshake: answer a challenge, then check the confirm.
+     *
+     * Any challenge gets an answer, since a stranger learns nothing from a MAC over a
+     * nonce it chose and one we chose; only a central that proves the key in its confirm
+     * is let in, and one that fails is disconnected.
+     */
+    private fun answer(frame: SharedBuysHandshake.Frame, device: BluetoothDevice) {
+        val key = handshakeKey ?: return
+        val address = device.address
+        when (frame) {
+            is SharedBuysHandshake.Frame.Challenge -> {
+                val nonce = SharedBuysHandshake.nonce()
+                if (!responses.containsKey(address) && responses.size >= MAX_PENDING_RESPONSES) {
+                    responses.keys.firstOrNull()?.let { responses.remove(it) }
+                }
+                responses[address] = frame.nonce to nonce
+                notify(SharedBuysHandshake.response(frame.nonce, nonce, key), device)
+            }
+            is SharedBuysHandshake.Frame.Confirm -> {
+                val pending = responses.remove(address)
+                if (pending == null ||
+                    !SharedBuysHandshake.verifiesConfirm(frame.mac, pending.first, pending.second, key)
+                ) {
+                    runCatching { server?.cancelConnection(device) }
+                    return
+                }
+                verifiedCentrals.add(address)
+                onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                // We never scanned this one, so its digest is unknown.
+                onEvent?.invoke(BluetoothEvent.PeerVerified(null))
+            }
+            is SharedBuysHandshake.Frame.Response -> Unit
+        }
+    }
+
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartFailure(errorCode: Int) = confined {
             onEvent?.invoke(BluetoothEvent.Unavailable("advertise failed $errorCode"))
@@ -394,6 +440,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 writeQueues.remove(address)
                 writing.remove(address)
                 peerDigests.remove(address)
+                challenges.remove(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }
         }
@@ -432,8 +479,10 @@ class SharedBuysBluetooth(private val context: Context) {
             descriptor: BluetoothGattDescriptor,
             status: Int
         ) = confined {
-            val key = sessionKey ?: return@confined
-            enqueueWrite(gatt, SharedBuysProfile.handshake(key))
+            if (handshakeKey == null) return@confined
+            val challenge = SharedBuysHandshake.nonce()
+            challenges[gatt.device.address] = challenge
+            enqueueWrite(gatt, SharedBuysHandshake.challenge(challenge))
         }
 
         override fun onCharacteristicWrite(
@@ -455,12 +504,19 @@ class SharedBuysBluetooth(private val context: Context) {
 
         private fun received(gatt: BluetoothGatt, value: ByteArray) {
             val address = gatt.device.address
-            if (SharedBuysProfile.isHandshake(value)) {
-                val key = sessionKey
-                if (key == null || !SharedBuysProfile.accepts(value, key)) {
+            val frame = SharedBuysHandshake.parse(value)
+            if (frame != null) {
+                // The central half of the handshake: the peripheral must answer our own
+                // challenge, and only then do we prove the key back to it.
+                val key = handshakeKey
+                val challenge = challenges.remove(address)
+                if (key == null || challenge == null || frame !is SharedBuysHandshake.Frame.Response ||
+                    !SharedBuysHandshake.verifiesResponse(frame.mac, challenge, frame.nonce, key)
+                ) {
                     reject(gatt)
                     return
                 }
+                enqueueWrite(gatt, SharedBuysHandshake.confirm(challenge, frame.nonce, key))
                 verifiedClients.add(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
                 onEvent?.invoke(BluetoothEvent.PeerVerified(peerDigests[address]))
@@ -481,15 +537,9 @@ class SharedBuysBluetooth(private val context: Context) {
             offset: Int,
             value: ByteArray
         ) = confined {
-            if (SharedBuysProfile.isHandshake(value)) {
-                val key = sessionKey
-                if (key != null && SharedBuysProfile.accepts(value, key)) {
-                    verifiedCentrals.add(device.address)
-                    notify(SharedBuysProfile.handshake(key), device)
-                    onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
-                    // We never scanned this one, so its digest is unknown.
-                    onEvent?.invoke(BluetoothEvent.PeerVerified(null))
-                }
+            val frame = SharedBuysHandshake.parse(value)
+            if (frame != null) {
+                answer(frame, device)
             } else if (verifiedCentrals.contains(device.address)) {
                 deliverFromServer(device.address, value)
             }
@@ -534,6 +584,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 subscribers.remove(device)
                 verifiedCentrals.remove(device.address)
                 serverReassemblers.remove(device.address)
+                responses.remove(device.address)
                 pendingNotifies.removeAll { it.second.address == device.address }
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }

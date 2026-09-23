@@ -467,21 +467,31 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
         sessionKey?.let {
             note("ble tag ${SharedBuysProfile.sessionTag(it).toHex()} window ${SharedBuysProfile.window()}")
-
-            val handshake = SharedBuysProfile.handshake(it)
-            val accepted = SharedBuysProfile.accepts(handshake, it)
-            val stranger = ByteArray(it.size) { 0x5a }
-            val rejected = !SharedBuysProfile.accepts(handshake, stranger)
-            val notConfused = !SharedBuysProfile.isHandshake(frames.first())
-            note(
-                "handshake ${handshake.size}B " +
-                    "accept ${if (accepted) "ok" else "FAILED"} " +
-                    "reject ${if (rejected) "ok" else "FAILED"} " +
-                    "framing ${if (notConfused) "ok" else "FAILED"}"
-            )
         }
 
+        checkHandshake(notConfused = SharedBuysHandshake.parse(frames.first()) == null)
         checkWire()
+    }
+
+    /** Runs the handshake test vector both platforms share, and a stranger against it. */
+    private fun checkHandshake(notConfused: Boolean) {
+        val key = SharedBuysHandshake.key(ByteArray(32) { it.toByte() })
+        val challenge = ByteArray(8) { (it + 1).toByte() }
+        val nonce = ByteArray(8) { (0x11 + it).toByte() }
+        val response = SharedBuysHandshake.response(challenge, nonce, key)
+        val confirm = SharedBuysHandshake.confirm(challenge, nonce, key)
+        val vector = response.toHex() == "04111213141516171812f9003d9145f14c" &&
+            confirm.toHex() == "05cff3acad54e390af"
+        val stranger = SharedBuysHandshake.key(ByteArray(32) { 0x5a })
+        val parsed = SharedBuysHandshake.parse(response) as? SharedBuysHandshake.Frame.Response
+        val verified = parsed != null &&
+            SharedBuysHandshake.verifiesResponse(parsed.mac, challenge, parsed.nonce, key) &&
+            !SharedBuysHandshake.verifiesResponse(parsed.mac, challenge, parsed.nonce, stranger)
+        note(
+            "handshake vector ${if (vector) "ok" else "FAILED"} " +
+                "verify ${if (verified) "ok" else "FAILED"} " +
+                "framing ${if (notConfused) "ok" else "FAILED"}"
+        )
     }
 
     /**

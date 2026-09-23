@@ -12,6 +12,7 @@ object SharedBuysCrypto {
     const val TOPIC_INFO = "circles-buys/v1/topic"
     const val OPS_INFO = "circles-buys/v1/ops"
     const val RELAY_AUTH_INFO = "circles-buys/v1/relay-auth"
+    const val HANDSHAKE_INFO = "circles-buys/v1/ble-handshake"
     const val TAG_LENGTH = 16
     const val NONCE_LENGTH = 12
     val RANDOM_NONCE_MARKER = byteArrayOf(0x53, 0x42, 0x32, 0x00)
@@ -23,6 +24,8 @@ object SharedBuysCrypto {
     fun newDeviceId(): String = ByteArray(4).also { random.nextBytes(it) }.toHex()
 
     fun newDeviceAuthKey(): ByteArray = ByteArray(32).also { random.nextBytes(it) }
+
+    fun randomNonce(size: Int): ByteArray = ByteArray(size).also { random.nextBytes(it) }
 
     fun roomId(sessionKey: ByteArray): String =
         hmac(sessionKey, TOPIC_INFO.toByteArray()).copyOf(16).toHex()
@@ -110,7 +113,7 @@ object SharedBuysCrypto {
             .putLong(seq)
             .array()
 
-    private fun hmac(key: ByteArray, message: ByteArray): ByteArray {
+    fun hmac(key: ByteArray, message: ByteArray): ByteArray {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(key, "HmacSHA256"))
         return mac.doFinal(message)

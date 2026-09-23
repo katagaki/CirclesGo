@@ -14,7 +14,6 @@ object SharedBuysProfile {
     const val ADVERTISEMENT_WINDOW_SECONDS = 900L
     const val MAX_PAYLOAD_PER_CHUNK = 160
     const val FRAME_MAGIC: Byte = 0x01
-    const val HANDSHAKE_MAGIC: Byte = 0x02
     const val ADVERTISEMENT_LENGTH = 6
     const val FRAME_HEADER_LENGTH = 4
     const val DEFAULT_ATT_MTU = 23
@@ -37,18 +36,6 @@ object SharedBuysProfile {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(sessionKey, "HmacSHA256"))
         return mac.doFinal(input).copyOf(2)
-    }
-
-    fun handshake(sessionKey: ByteArray): ByteArray =
-        byteArrayOf(HANDSHAKE_MAGIC) + sessionTag(sessionKey)
-
-    fun isHandshake(frame: ByteArray): Boolean =
-        frame.size == 3 && frame[0] == HANDSHAKE_MAGIC
-
-    fun accepts(frame: ByteArray, sessionKey: ByteArray): Boolean {
-        if (!isHandshake(frame)) return false
-        val tag = frame.copyOfRange(1, 3)
-        return acceptedTags(sessionKey).any { it.contentEquals(tag) }
     }
 
     fun acceptedTags(sessionKey: ByteArray, window: Long = window()): List<ByteArray> =
@@ -85,6 +72,70 @@ object SharedBuysProfile {
         val tag = advertisement.copyOf(2)
         return acceptedTags(sessionKey, window).any { it.contentEquals(tag) }
     }
+}
+
+/**
+ * Proves both ends of a link hold the room key, over fresh nonces.
+ *
+ * The old handshake was the advertisement's two tag bytes, which every scanner in range
+ * can read, so anyone could replay them and be taken for a member. Now the central sends
+ * a random challenge, the peripheral answers with its own nonce and a MAC over both, and
+ * the central confirms with a MAC under a different label, so neither answer can be
+ * reflected back as the other. Every frame fits the 20 bytes a link at the default MTU
+ * carries.
+ */
+object SharedBuysHandshake {
+
+    const val CHALLENGE_MAGIC: Byte = 0x03
+    const val RESPONSE_MAGIC: Byte = 0x04
+    const val CONFIRM_MAGIC: Byte = 0x05
+    const val NONCE_LENGTH = 8
+    const val MAC_LENGTH = 8
+
+    sealed interface Frame {
+        class Challenge(val nonce: ByteArray) : Frame
+        class Response(val nonce: ByteArray, val mac: ByteArray) : Frame
+        class Confirm(val mac: ByteArray) : Frame
+    }
+
+    fun key(sessionKey: ByteArray): ByteArray =
+        SharedBuysCrypto.derive(SharedBuysCrypto.HANDSHAKE_INFO, sessionKey)
+
+    fun nonce(): ByteArray = SharedBuysCrypto.randomNonce(NONCE_LENGTH)
+
+    fun challenge(nonce: ByteArray): ByteArray = byteArrayOf(CHALLENGE_MAGIC) + nonce
+
+    fun response(challenge: ByteArray, nonce: ByteArray, key: ByteArray): ByteArray =
+        byteArrayOf(RESPONSE_MAGIC) + nonce + mac("resp", challenge, nonce, key)
+
+    fun confirm(challenge: ByteArray, response: ByteArray, key: ByteArray): ByteArray =
+        byteArrayOf(CONFIRM_MAGIC) + mac("conf", challenge, response, key)
+
+    fun verifiesResponse(mac: ByteArray, challenge: ByteArray, response: ByteArray, key: ByteArray): Boolean =
+        java.security.MessageDigest.isEqual(mac, mac("resp", challenge, response, key))
+
+    fun verifiesConfirm(mac: ByteArray, challenge: ByteArray, response: ByteArray, key: ByteArray): Boolean =
+        java.security.MessageDigest.isEqual(mac, mac("conf", challenge, response, key))
+
+    /** Reads a handshake frame, told apart from chunk frames (0x01) by first byte and exact length. */
+    fun parse(frame: ByteArray): Frame? {
+        if (frame.isEmpty()) return null
+        return when {
+            frame[0] == CHALLENGE_MAGIC && frame.size == 1 + NONCE_LENGTH ->
+                Frame.Challenge(frame.copyOfRange(1, frame.size))
+            frame[0] == RESPONSE_MAGIC && frame.size == 1 + NONCE_LENGTH + MAC_LENGTH ->
+                Frame.Response(
+                    frame.copyOfRange(1, 1 + NONCE_LENGTH),
+                    frame.copyOfRange(1 + NONCE_LENGTH, frame.size)
+                )
+            frame[0] == CONFIRM_MAGIC && frame.size == 1 + MAC_LENGTH ->
+                Frame.Confirm(frame.copyOfRange(1, frame.size))
+            else -> null
+        }
+    }
+
+    private fun mac(label: String, challenge: ByteArray, response: ByteArray, key: ByteArray): ByteArray =
+        SharedBuysCrypto.hmac(key, label.toByteArray() + challenge + response).copyOf(MAC_LENGTH)
 }
 
 object SharedBuysDigest {
