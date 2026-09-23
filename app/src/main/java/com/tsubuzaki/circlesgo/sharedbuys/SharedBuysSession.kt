@@ -694,15 +694,19 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 resend(event.seq)
             }
             is RelayEvent.Records -> ingest(event.records)
+            // The relay refuses writes once a room holds 500 records, and closes the
+            // socket that tried. Reconnecting only re-sends the refused change and is
+            // closed again, every 30 seconds for the rest of the room's life, so a full
+            // room waits for the next resume instead.
             is RelayEvent.Failed -> {
                 status = "offline (${event.reason})"
                 note("failed: ${event.reason}")
-                scheduleReconnect()
+                if (event.reason != STORAGE_FULL_SLUG) scheduleReconnect()
             }
             is RelayEvent.Closed -> {
                 status = "offline (closed ${event.code})"
                 note("closed ${event.code}")
-                scheduleReconnect()
+                if (event.code != STORAGE_FULL_CODE) scheduleReconnect()
             }
         }
     }
@@ -900,6 +904,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
          */
         private const val COALESCE_WINDOW_MS = 250L
         private const val RESEND_PAGE_DELAY_MS = 600L
+        private const val STORAGE_FULL_SLUG = "storage"
+        private const val STORAGE_FULL_CODE = 4005
 
     }
 }
