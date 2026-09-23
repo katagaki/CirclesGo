@@ -29,10 +29,17 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import java.util.UUID
 
+/**
+ * One end of one link. The same phone connected both ways is two peers: isCentral is
+ * true for a central connected to our server, false for a peripheral we connected to.
+ */
+data class BluetoothPeer(val address: String, val isCentral: Boolean)
+
 sealed interface BluetoothEvent {
     data class PeerCount(val count: Int) : BluetoothEvent
-    data class PeerVerified(val digest: ByteArray?) : BluetoothEvent
-    data class Payload(val bytes: ByteArray) : BluetoothEvent
+    data class PeerVerified(val peer: BluetoothPeer, val digest: ByteArray?) : BluetoothEvent
+    data class PeerLost(val peer: BluetoothPeer) : BluetoothEvent
+    data class Payload(val bytes: ByteArray, val from: BluetoothPeer) : BluetoothEvent
     data class Unavailable(val reason: String) : BluetoothEvent
 }
 
@@ -153,16 +160,20 @@ class SharedBuysBluetooth(private val context: Context) {
         advertise()
     }
 
-    fun send(payload: ByteArray) {
+    /** Sends to one peer, or to every verified peer when peer is null. */
+    fun send(payload: ByteArray, peer: BluetoothPeer? = null) {
         messageCounter = (messageCounter + 1).toByte()
         // Each link negotiates its own MTU, so the payload is cut to fit the peer it is
         // going to rather than to one hardcoded size.
-        subscribers.filter { verifiedCentrals.contains(it.address) }.forEach { device ->
+        subscribers.filter {
+            verifiedCentrals.contains(it.address) && (peer == null || peer == BluetoothPeer(it.address, true))
+        }.forEach { device ->
             SharedBuysFraming.chunks(payload, messageCounter, payloadLimit(device.address))
                 .forEach { frame -> notify(frame, device) }
         }
         clients.forEach { (address, gatt) ->
             if (!verifiedClients.contains(address)) return@forEach
+            if (peer != null && peer != BluetoothPeer(address, false)) return@forEach
             SharedBuysFraming.chunks(payload, messageCounter, payloadLimit(address))
                 .forEach { frame -> enqueueWrite(gatt, frame) }
         }
@@ -317,12 +328,20 @@ class SharedBuysBluetooth(private val context: Context) {
         inboxes.remove(address)
         clientReassemblers.remove(address)
         mtus.remove(address)
-        verifiedClients.remove(address)
+        val wasVerified = verifiedClients.remove(address)
         writeQueues.remove(address)
         writing.remove(address)
         peerDigests.remove(address)
         challenges.remove(address)
         onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+        if (wasVerified) onEvent?.invoke(BluetoothEvent.PeerLost(BluetoothPeer(address, false)))
+    }
+
+    private fun forgetCentral(device: BluetoothDevice) {
+        subscribers.remove(device)
+        if (verifiedCentrals.remove(device.address)) {
+            onEvent?.invoke(BluetoothEvent.PeerLost(BluetoothPeer(device.address, true)))
+        }
     }
 
     /**
@@ -382,12 +401,16 @@ class SharedBuysBluetooth(private val context: Context) {
 
     private fun deliverFromServer(address: String, frame: ByteArray) {
         val reassembler = serverReassemblers.getOrPut(address) { SharedBuysFraming.Reassembler() }
-        reassembler.accept(frame)?.let { onEvent?.invoke(BluetoothEvent.Payload(it)) }
+        reassembler.accept(frame)?.let {
+            onEvent?.invoke(BluetoothEvent.Payload(it, BluetoothPeer(address, true)))
+        }
     }
 
     private fun deliverFromClient(address: String, frame: ByteArray) {
         val reassembler = clientReassemblers.getOrPut(address) { SharedBuysFraming.Reassembler() }
-        reassembler.accept(frame)?.let { onEvent?.invoke(BluetoothEvent.Payload(it)) }
+        reassembler.accept(frame)?.let {
+            onEvent?.invoke(BluetoothEvent.Payload(it, BluetoothPeer(address, false)))
+        }
     }
 
     private fun payloadLimit(address: String): Int =
@@ -436,7 +459,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 verifiedCentrals.add(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
                 // We never scanned this one, so its digest is unknown.
-                onEvent?.invoke(BluetoothEvent.PeerVerified(null))
+                onEvent?.invoke(BluetoothEvent.PeerVerified(BluetoothPeer(address, true), null))
             }
             is SharedBuysHandshake.Frame.Response -> Unit
         }
@@ -563,7 +586,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 enqueueWrite(gatt, SharedBuysHandshake.confirm(challenge, frame.nonce, key))
                 verifiedClients.add(address)
                 onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
-                onEvent?.invoke(BluetoothEvent.PeerVerified(peerDigests[address]))
+                onEvent?.invoke(BluetoothEvent.PeerVerified(BluetoothPeer(address, false), peerDigests[address]))
                 return
             }
             if (!verifiedClients.contains(address)) return
@@ -615,8 +638,8 @@ class SharedBuysBluetooth(private val context: Context) {
             if (value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) {
                 subscribers.add(device)
             } else {
-                subscribers.remove(device)
-                verifiedCentrals.remove(device.address)
+                forgetCentral(device)
+                onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
             }
             if (responseNeeded) {
                 server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
@@ -626,8 +649,7 @@ class SharedBuysBluetooth(private val context: Context) {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) = confined {
             if (newState == BluetoothProfile.STATE_CONNECTED) armHandshakeDeadline(device)
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                subscribers.remove(device)
-                verifiedCentrals.remove(device.address)
+                forgetCentral(device)
                 serverReassemblers.remove(device.address)
                 responses.remove(device.address)
                 pendingNotifies.removeAll { it.second.address == device.address }

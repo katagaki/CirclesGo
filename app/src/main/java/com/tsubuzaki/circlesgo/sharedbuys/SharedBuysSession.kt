@@ -60,6 +60,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private val outbox = mutableListOf<RelayRecord>()
     private var pendingWrite: PendingWrite? = null
     private var writeJob: kotlinx.coroutines.Job? = null
+    /** Links we have already sent a want down, so each asks at most once. */
+    private val wantedPeers = mutableSetOf<BluetoothPeer>()
+    private val sealed = mutableMapOf<String, RelayRecord>()
     private var flushJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
@@ -254,6 +257,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         eventNumber = snapshot.eventNumber
         lastSeq = snapshot.lastSeq
         changes.clear()
+        sealed.clear()
         changes.addAll(snapshot.changes)
         clock = snapshot.clock ?: (changes.maxOfOrNull { it.order } ?: 0L)
         invalidateFold()
@@ -302,6 +306,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = 0
         clock = 0
         changes.clear()
+        sealed.clear()
         invalidateFold()
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
@@ -324,6 +329,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = 0
         clock = 0
         changes.clear()
+        sealed.clear()
         invalidateFold()
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
@@ -346,6 +352,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         sessionKey = null
         deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         changes.clear()
+        sealed.clear()
         invalidateFold()
         lastSeq = 0
         clock = 0
@@ -386,8 +393,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                     bluetoothPeers = event.count
                     note("bluetooth peers ${event.count}")
                 }
-                is BluetoothEvent.PeerVerified -> handshakeCompleted(event.digest)
-                is BluetoothEvent.Payload -> handleBluetooth(event.bytes)
+                is BluetoothEvent.PeerVerified -> handshakeCompleted(event.peer, event.digest)
+                is BluetoothEvent.PeerLost -> wantedPeers.remove(event.peer)
+                is BluetoothEvent.Payload -> handleBluetooth(event.bytes, event.from)
                 is BluetoothEvent.Unavailable -> note("bluetooth: ${event.reason}")
             }
         }
@@ -396,22 +404,28 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     fun stopBluetooth() {
         bluetooth.stop()
         bluetoothPeers = 0
+        wantedPeers.clear()
     }
 
     fun missingBluetoothPermissions(): List<String> = bluetooth.missingPermissions()
 
     /**
-     * A peer that advertised our own digest holds the same Bluetooth-eligible log, so
-     * there is nothing for a version vector exchange to turn up.
+     * Opens the exchange on a link we connected, unless the peer is already level.
+     *
+     * Only the connecting side asks first. Both sides asking on every link, and the
+     * accepting side never knowing the peer's digest, meant four wants per pair of
+     * phones, each answered to everyone in range. The accepting side asks back from
+     * handleBluetooth instead, once, and only when the two logs differ.
      */
-    private fun handshakeCompleted(peerDigest: ByteArray?) {
+    private fun handshakeCompleted(peer: BluetoothPeer, peerDigest: ByteArray?) {
+        if (peer.isCentral) return
         if (peerDigest != null &&
             peerDigest.contentEquals(SharedBuysDigest.bytes(bluetoothDigestVector))
         ) {
             note("peer is level, skipping want")
             return
         }
-        sendWant()
+        sendWant(peer)
     }
 
     /**
@@ -423,32 +437,35 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
      * over the whole log is honest — holding every change up to n includes every status
      * flip up to n — and anything above a hole comes again and is deduped on ingest.
      */
-    private fun sendWant() {
-        SharedBuysWire.wantFrames(versionVector).forEach { bluetooth.send(it) }
+    private fun sendWant(peer: BluetoothPeer) {
+        wantedPeers.add(peer)
+        SharedBuysWire.wantFrames(versionVector).forEach { bluetooth.send(it, peer) }
     }
 
-    private fun handleBluetooth(payload: ByteArray) {
+    private fun handleBluetooth(payload: ByteArray, peer: BluetoothPeer) {
         when (val frame = SharedBuysWire.decode(payload)) {
             is SharedBuysFrame.Want -> {
+                // The reply goes to whoever asked, not to every peer in range.
                 val missing = changes.filter { change ->
                     SharedBuyKind.travelsOverBluetooth(change.payload.kind) &&
                         change.seq > (frame.vector[change.device] ?: 0L)
                 }
-                sendOverBluetooth(missing)
+                sendOverBluetooth(missing, peer)
+                if (peer !in wantedPeers && frame.vector != versionVector) sendWant(peer)
             }
             is SharedBuysFrame.Changes -> ingest(frame.records)
             null -> Unit
         }
     }
 
-    private fun sendOverBluetooth(outgoing: List<SharedBuyChange>) {
+    private fun sendOverBluetooth(outgoing: List<SharedBuyChange>, peer: BluetoothPeer? = null) {
         val eligible = outgoing.filter { SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
         if (eligible.isEmpty() || bluetoothPeers == 0) return
         val key = sessionKey ?: return
         val room = roomId ?: return
         val records = eligible.mapNotNull { seal(it, key, room) }
         if (records.isEmpty()) return
-        SharedBuysWire.changeFrames(records).forEach { bluetooth.send(it) }
+        SharedBuysWire.changeFrames(records).forEach { bluetooth.send(it, peer) }
     }
 
     fun runSelfTest() {
@@ -649,7 +666,11 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         relay.send(records) { event -> handle(event) }
     }
 
+    /** Seals each change once, rather than on every want reply and every reconnect. */
     private fun seal(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
+        sealed[change.id] ?: sealFresh(change, key, room)?.also { sealed[change.id] = it }
+
+    private fun sealFresh(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
         runCatching {
             val plaintext = json.encodeToString(change.payload).toByteArray()
             val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
