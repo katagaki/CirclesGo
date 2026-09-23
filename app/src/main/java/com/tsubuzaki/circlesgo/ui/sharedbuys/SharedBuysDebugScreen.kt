@@ -107,7 +107,7 @@ fun SharedBuysDebugScreen(session: SharedBuysSession, onClose: () -> Unit) {
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
-                items(session.changes.sortedBy { it.seq }) { change ->
+                items(session.changes.sortedBy { it.order }) { change ->
                     Text(
                         "${change.id}  kind=${change.payload.kind}",
                         style = MaterialTheme.typography.bodySmall

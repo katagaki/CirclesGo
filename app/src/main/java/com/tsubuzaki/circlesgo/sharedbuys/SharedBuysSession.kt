@@ -54,6 +54,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private var deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
     private var eventNumber = 0
     private var lastSeq = 0L
+    private var clock = 0L
     private var reconnectAttempt = 0
     private var reconnectJob: kotlinx.coroutines.Job? = null
     private val outbox = mutableListOf<RelayRecord>()
@@ -268,6 +269,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         lastSeq = snapshot.lastSeq
         changes.clear()
         changes.addAll(snapshot.changes)
+        clock = snapshot.clock ?: (changes.maxOfOrNull { it.order } ?: 0L)
         invalidateFold()
         note("restored room $roomId as $deviceId")
         SharedBuysLiveUpdateService.start(context)
@@ -312,6 +314,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         this.eventNumber = eventNumber
         lastSeq = 0
+        clock = 0
         changes.clear()
         invalidateFold()
         persist()
@@ -333,6 +336,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
         eventNumber = uri.getQueryParameter("e")?.toIntOrNull() ?: 0
         lastSeq = 0
+        clock = 0
         changes.clear()
         invalidateFold()
         persist()
@@ -358,6 +362,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         changes.clear()
         invalidateFold()
         lastSeq = 0
+        clock = 0
         status = "idle"
         submit(PendingWrite.CLEAR)
         SharedBuysLiveUpdateService.stop(context)
@@ -601,10 +606,11 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             return
         }
         lastSeq += 1
+        clock += 1
         val change = SharedBuyChange(
             device = deviceId,
             seq = lastSeq,
-            payload = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value, space)
+            payload = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value, space, clock)
         )
         changes.add(change)
         invalidateFold()
@@ -772,9 +778,11 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             // overlapping the live stream — so the set has to grow as we append.
             if (!known.add(change.id)) continue
             changes.add(change)
-            // A Lamport clock. Without it a fresh device's seq 1 sorts under an
-            // established peer's seq 30, and the older edit wins on every screen.
-            lastSeq = maxOf(lastSeq, change.seq)
+            // A Lamport clock. Without it a fresh device's first change sorts under an
+            // established peer's thirtieth, and the older edit wins on every screen.
+            clock = maxOf(clock, change.order)
+            // Our own change coming back means a save was lost; never reuse its seq.
+            if (change.device == deviceId) lastSeq = maxOf(lastSeq, change.seq)
             added += 1
         }
         if (added > 0) {
@@ -825,7 +833,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             deviceAuthKey = deviceAuthKey.toBase64Url(),
             eventNumber = eventNumber,
             lastSeq = lastSeq,
-            changes = changes.toList()
+            changes = changes.toList(),
+            clock = clock
         )
     }
 

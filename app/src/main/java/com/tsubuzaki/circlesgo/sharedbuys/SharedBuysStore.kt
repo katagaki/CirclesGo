@@ -11,7 +11,8 @@ data class SharedBuysSnapshot(
     val deviceAuthKey: String? = null,
     val eventNumber: Int,
     val lastSeq: Long,
-    val changes: List<SharedBuyChange>
+    val changes: List<SharedBuyChange>,
+    val clock: Long? = null
 )
 
 class SharedBuysStore(context: Context) {

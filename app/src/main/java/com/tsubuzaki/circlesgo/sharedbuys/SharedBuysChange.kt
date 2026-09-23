@@ -72,7 +72,17 @@ data class SharedBuyPayload(
      * of a name. Optional, so it costs nothing on the other six kinds -- explicitNulls
      * is off, so nil is omitted rather than encoded as null.
      */
-    @SerialName("s") val space: String? = null
+    @SerialName("s") val space: String? = null,
+    /**
+     * The Lamport clock the change was written at, which is what orders the fold.
+     *
+     * Bumping seq to act as the clock left holes in each device's own numbering, so the
+     * gapless prefix the relay and Bluetooth sync by stopped at the first jump and every
+     * reconnect fetched almost the whole room again. seq now counts only this device's
+     * changes. Absent on changes written before the split, which order by seq as they
+     * always did.
+     */
+    @SerialName("l") val clock: Long? = null
 )
 
 @Serializable
@@ -82,6 +92,9 @@ data class SharedBuyChange(
     val payload: SharedBuyPayload
 ) {
     val id: String get() = "$device#$seq"
+
+    /** Where the change sits in the fold. */
+    val order: Long get() = payload.clock ?: seq
 }
 
 /** A circle as the shared log describes it, for a member who cannot look it up. */
@@ -109,7 +122,7 @@ object SharedBuyFold {
         val order = mutableListOf<String>()
         val deferred = mutableMapOf<String, MutableList<SharedBuyChange>>()
 
-        for (change in changes.sortedWith(compareBy({ it.seq }, { it.device }))) {
+        for (change in changes.sortedWith(compareBy({ it.order }, { it.device }))) {
             val payload = change.payload
             when {
                 payload.kind == SharedBuyKind.ADD_ITEM -> {
@@ -170,7 +183,7 @@ object SharedBuyFold {
      */
     fun circles(changes: List<SharedBuyChange>): Map<Int, SharedBuyCircle> {
         val result = mutableMapOf<Int, SharedBuyCircle>()
-        for (change in changes.sortedWith(compareBy({ it.seq }, { it.device }))) {
+        for (change in changes.sortedWith(compareBy({ it.order }, { it.device }))) {
             if (change.payload.kind == SharedBuyKind.CIRCLE_INFO) {
                 result[change.payload.circleId] = SharedBuyCircle(
                     id = change.payload.circleId,
@@ -184,7 +197,7 @@ object SharedBuyFold {
 
     fun members(changes: List<SharedBuyChange>): Map<Int, String> {
         val result = mutableMapOf<Int, String>()
-        for (change in changes.sortedWith(compareBy({ it.seq }, { it.device }))) {
+        for (change in changes.sortedWith(compareBy({ it.order }, { it.device }))) {
             if (change.payload.kind == SharedBuyKind.MEMBER_JOINED) {
                 result[change.payload.actor] = change.payload.text.orEmpty()
             }
