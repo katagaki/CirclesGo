@@ -670,11 +670,15 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
     }
 
+    /**
+     * Arms the reconnect.
+     *
+     * Nearby peers never defer it. Bluetooth only carries status flips, so holding the
+     * relay off while a peer was in range stranded every added item, rename, cost and
+     * assignment on this phone for as long as the two stayed together.
+     */
     private fun scheduleReconnect() {
         if (!isActive || reconnectJob != null) return
-        if (bluetoothPeers > 0) {
-            note("holding off, bluetooth is carrying")
-        }
         reconnectAttempt = minOf(reconnectAttempt + 1, 6)
         val delayMs = (minOf(Math.pow(2.0, reconnectAttempt.toDouble()), 30.0) * 1000).toLong() +
             (0..1000).random()
@@ -683,7 +687,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             kotlinx.coroutines.delay(delayMs)
             reconnectJob = null
             if (!isActive) return@launch
-            if (bluetoothPeers == 0) connect() else scheduleReconnect()
+            connect()
         }
     }
 
