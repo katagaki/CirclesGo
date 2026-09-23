@@ -39,6 +39,7 @@ sealed interface BluetoothEvent {
 private const val MTU = 247
 private const val REFRESH_INTERVAL_MS = 30_000L
 private const val MAX_PENDING_RESPONSES = 16
+private const val HANDSHAKE_DEADLINE_MS = 10_000L
 private val CLIENT_CONFIG_UUID: UUID =
     UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -298,9 +299,59 @@ class SharedBuysBluetooth(private val context: Context) {
         return until <= System.currentTimeMillis()
     }
 
+    /**
+     * Drops a peripheral and backs it off for a minute.
+     *
+     * Closing here rather than waiting for the disconnect callback: a connection still
+     * pending when it is cancelled may never report one.
+     */
     private fun reject(gatt: BluetoothGatt) {
-        rejectedUntil[gatt.device.address] = System.currentTimeMillis() + 60_000L
+        val address = gatt.device.address
+        rejectedUntil[address] = System.currentTimeMillis() + 60_000L
         runCatching { gatt.disconnect() }
+        if (clients[address] === gatt) forget(address)
+    }
+
+    private fun forget(address: String) {
+        clients.remove(address)?.let { runCatching { it.close() } }
+        inboxes.remove(address)
+        clientReassemblers.remove(address)
+        mtus.remove(address)
+        verifiedClients.remove(address)
+        writeQueues.remove(address)
+        writing.remove(address)
+        peerDigests.remove(address)
+        challenges.remove(address)
+        onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+    }
+
+    /**
+     * Rejects the peripheral if it has not proved the room key in time.
+     *
+     * A peer that ignores the challenge — any nearby device of another room, or one that
+     * never answers — otherwise held its connection for as long as it stayed in range,
+     * and at a busy venue those filled every GATT slot the stack has.
+     */
+    private fun armHandshakeDeadline(gatt: BluetoothGatt) {
+        val address = gatt.device.address
+        handler.postDelayed({
+            if (clients[address] === gatt && !verifiedClients.contains(address)) reject(gatt)
+        }, HANDSHAKE_DEADLINE_MS)
+    }
+
+    /**
+     * The same deadline for a central connected to our server, which we can disconnect.
+     *
+     * The server callback also reports links we opened as a client; those are left to
+     * the client-side deadline, since cancelling here would drop the shared link.
+     */
+    private fun armHandshakeDeadline(device: BluetoothDevice) {
+        handler.postDelayed({
+            val address = device.address
+            if (sessionKey != null && !clients.containsKey(address) && !verifiedCentrals.contains(address)) {
+                runCatching { server?.cancelConnection(device) }
+            }
+        }, HANDSHAKE_DEADLINE_MS)
     }
 
     private fun notify(frame: ByteArray, device: BluetoothDevice) {
@@ -418,7 +469,9 @@ class SharedBuysBluetooth(private val context: Context) {
                 }
                 peerDigests[address] = SharedBuysProfile.digest(advertisement)
             }
-            clients[address] = result.device.connectGatt(context, false, gattCallback)
+            val gatt = result.device.connectGatt(context, false, gattCallback) ?: return@confined
+            clients[address] = gatt
+            armHandshakeDeadline(gatt)
         }
 
         override fun onScanFailed(errorCode: Int) = confined {
@@ -432,16 +485,7 @@ class SharedBuysBluetooth(private val context: Context) {
                 if (!gatt.requestMtu(MTU)) gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 val address = gatt.device.address
-                clients.remove(address)?.close()
-                inboxes.remove(address)
-                clientReassemblers.remove(address)
-                mtus.remove(address)
-                verifiedClients.remove(address)
-                writeQueues.remove(address)
-                writing.remove(address)
-                peerDigests.remove(address)
-                challenges.remove(address)
-                onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
+                if (clients[address] === gatt) forget(address) else runCatching { gatt.close() }
             }
         }
 
@@ -580,6 +624,7 @@ class SharedBuysBluetooth(private val context: Context) {
         }
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) = confined {
+            if (newState == BluetoothProfile.STATE_CONNECTED) armHandshakeDeadline(device)
             if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 subscribers.remove(device)
                 verifiedCentrals.remove(device.address)
