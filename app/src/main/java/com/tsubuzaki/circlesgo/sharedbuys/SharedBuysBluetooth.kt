@@ -76,6 +76,8 @@ class SharedBuysBluetooth(private val context: Context) {
     private val peerDigests = mutableMapOf<String, ByteArray>()
     private val handler = Handler(Looper.getMainLooper())
     private var advertisedWindow: Long? = null
+    /** The room tags a peer may advertise, recomputed only when the window turns. */
+    private var tagCache: Pair<Long, List<ByteArray>>? = null
 
     private var sessionKey: ByteArray? = null
     private var handshakeKey: ByteArray? = null
@@ -147,6 +149,7 @@ class SharedBuysBluetooth(private val context: Context) {
         peerDigests.clear()
         challenges.clear()
         responses.clear()
+        tagCache = null
         runCatching { server?.close() }
         server = null
         sessionKey = null
@@ -413,6 +416,12 @@ class SharedBuysBluetooth(private val context: Context) {
         }
     }
 
+    private fun acceptedTags(sessionKey: ByteArray): List<ByteArray> {
+        val window = SharedBuysProfile.window()
+        tagCache?.let { (cachedWindow, tags) -> if (cachedWindow == window) return tags }
+        return SharedBuysProfile.acceptedTags(sessionKey, window).also { tagCache = window to it }
+    }
+
     private fun payloadLimit(address: String): Int =
         SharedBuysProfile.payloadLimit(mtus[address] ?: SharedBuysProfile.DEFAULT_ATT_MTU)
 
@@ -486,7 +495,8 @@ class SharedBuysBluetooth(private val context: Context) {
                 result.scanRecord?.deviceName
             )
             if (advertisement != null) {
-                if (!SharedBuysProfile.accepts(advertisement, key)) {
+                val tag = advertisement.copyOf(2)
+                if (acceptedTags(key).none { it.contentEquals(tag) }) {
                     rejectedUntil[address] = System.currentTimeMillis() + 60_000L
                     return@confined
                 }

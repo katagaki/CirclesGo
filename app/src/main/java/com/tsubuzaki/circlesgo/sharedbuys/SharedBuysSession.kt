@@ -63,6 +63,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     /** Links we have already sent a want down, so each asks at most once. */
     private val wantedPeers = mutableSetOf<BluetoothPeer>()
     private val sealed = mutableMapOf<String, RelayRecord>()
+    private var keyCache: Pair<ByteArray, SharedBuysKeys>? = null
     private var flushJob: kotlinx.coroutines.Job? = null
 
     val isActive: Boolean get() = sessionKey != null
@@ -672,11 +673,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     private fun sealFresh(change: SharedBuyChange, key: ByteArray, room: String): RelayRecord? =
         runCatching {
+            val keys = keys(key)
             val plaintext = json.encodeToString(change.payload).toByteArray()
-            val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
-            val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
-            val blob = SharedBuysCrypto.seal(plaintext, contentKey, room, change.device, change.seq)
-            val tag = SharedBuysCrypto.recordTag(change.device, change.seq, blob, relayAuthKey)
+            val blob = SharedBuysCrypto.seal(plaintext, keys.content, room, change.device, change.seq)
+            val tag = SharedBuysCrypto.recordTag(change.device, change.seq, blob, keys.relayAuth)
             RelayRecord(change.device, change.seq, blob.toBase64Url(), tag.toBase64Url())
         }.getOrNull()
 
@@ -764,15 +764,21 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val known = changes.mapTo(mutableSetOf()) { it.id }
         val fresh = records.filter { "${it.device}#${it.seq}" !in known }
         if (fresh.isEmpty()) return
+        val keys = keys(key)
         scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val opened = fresh.mapNotNull { open(it, key, room) }
+            val opened = fresh.mapNotNull { open(it, keys, room) }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { adopt(opened) }
         }
     }
 
-    private fun open(record: RelayRecord, key: ByteArray, room: String): SharedBuyChange? {
+    /** The room's record keys, derived once per session key instead of twice per record. */
+    private fun keys(sessionKey: ByteArray): SharedBuysKeys {
+        keyCache?.let { (cachedFor, keys) -> if (cachedFor.contentEquals(sessionKey)) return keys }
+        return SharedBuysKeys(sessionKey).also { keyCache = sessionKey to it }
+    }
+
+    private fun open(record: RelayRecord, keys: SharedBuysKeys, room: String): SharedBuyChange? {
         val identifier = "${record.device}#${record.seq}"
-        val relayAuthKey = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, key)
         // Whoever handed us this record — the relay, or a peer over Bluetooth — is not
         // trusted to have authored it. Check the tag before it enters the log.
         val authentic = runCatching {
@@ -780,17 +786,16 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 record.device,
                 record.seq,
                 record.blob.fromBase64Url(),
-                relayAuthKey
+                keys.relayAuth
             ).contentEquals(record.tag.fromBase64Url())
         }.getOrDefault(false)
         if (!authentic) {
             note("bad tag on $identifier")
             return null
         }
-        val contentKey = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, key)
         val payload = runCatching {
             val blob = record.blob.fromBase64Url()
-            val plaintext = SharedBuysCrypto.open(blob, contentKey, room, record.device, record.seq)
+            val plaintext = SharedBuysCrypto.open(blob, keys.content, room, record.device, record.seq)
             json.decodeFromString<SharedBuyPayload>(String(plaintext))
         }.getOrNull()
         if (payload == null) {

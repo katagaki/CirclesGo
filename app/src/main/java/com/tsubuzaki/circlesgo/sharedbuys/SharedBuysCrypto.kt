@@ -120,6 +120,12 @@ object SharedBuysCrypto {
     }
 }
 
+/** The two keys every record needs, derived once per room rather than per record. */
+class SharedBuysKeys(sessionKey: ByteArray) {
+    val content: ByteArray = SharedBuysCrypto.derive(SharedBuysCrypto.OPS_INFO, sessionKey)
+    val relayAuth: ByteArray = SharedBuysCrypto.derive(SharedBuysCrypto.RELAY_AUTH_INFO, sessionKey)
+}
+
 fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
 fun String.fromHex(): ByteArray =

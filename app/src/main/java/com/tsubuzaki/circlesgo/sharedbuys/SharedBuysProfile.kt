@@ -66,12 +66,6 @@ object SharedBuysProfile {
     }
 
     fun digest(advertisement: ByteArray): ByteArray = advertisement.copyOfRange(2, advertisement.size)
-
-    fun accepts(advertisement: ByteArray, sessionKey: ByteArray, window: Long = window()): Boolean {
-        if (advertisement.size != ADVERTISEMENT_LENGTH) return false
-        val tag = advertisement.copyOf(2)
-        return acceptedTags(sessionKey, window).any { it.contentEquals(tag) }
-    }
 }
 
 /**
