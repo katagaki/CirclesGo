@@ -660,7 +660,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 status = "connected"
                 reconnectAttempt = 0
                 note("connected")
-                resend()
+            }
+            is RelayEvent.Held -> {
+                // Our own history coming back from the relay means a save was lost;
+                // never reuse a sequence number it already holds.
+                lastSeq = maxOf(lastSeq, event.seq)
+                resend(event.seq)
             }
             is RelayEvent.Records -> ingest(event.records)
             is RelayEvent.Failed -> {
@@ -698,17 +703,18 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     }
 
     /**
-     * Uploads every change this device authored, in frames the relay will accept.
+     * Uploads the changes this device authored that the relay does not hold yet.
      *
-     * Taking the first 32 and discarding the rest left later changes with no path to the
-     * server at all: resend() only runs on connect, and always re-took the same 32. Each
-     * page is sealed as it is sent, so a long backlog no longer pays the whole seal cost
-     * — encode, two derivations and AES-GCM per change — before transmitting any of it.
+     * above is the gapless prefix the relay reported after hello. Re-sending the whole
+     * history on every reconnect re-sealed and re-uploaded changes the relay only threw
+     * away as duplicates. Each page is sealed as it is sent, in frames the relay will
+     * accept.
      */
-    private fun resend() {
+    private fun resend(above: Long) {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val pages = changes.filter { it.device == deviceId }.chunked(RECORDS_PER_FRAME)
+        val pages = changes.filter { it.device == deviceId && it.seq > above }
+            .chunked(RECORDS_PER_FRAME)
         scope.launch {
             pages.forEachIndexed { index, page ->
                 val records = page.mapNotNull { seal(it, key, room) }

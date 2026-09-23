@@ -26,6 +26,9 @@ data class RelayRecord(val device: String, val seq: Long, val blob: String, val 
 sealed interface RelayEvent {
     data object Connected : RelayEvent
     data class Records(val records: List<RelayRecord>) : RelayEvent
+
+    /** How much of this device's own history the relay holds, as a gapless prefix. */
+    data class Held(val seq: Long) : RelayEvent
     data class Failed(val reason: String) : RelayEvent
 
     /**
@@ -65,6 +68,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                 socket.send(Frame.Text(helloFrame(endpoint)))
                 onEvent(RelayEvent.Connected)
                 var lastPongAt = 0L
+                var heldSeen = false
                 val heartbeat = launch {
                     while (true) {
                         kotlinx.coroutines.delay(HEARTBEAT_INTERVAL_MS)
@@ -81,7 +85,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                     if (frame is Frame.Text) {
                         val text = frame.readText()
                         if (text == "pong") lastPongAt = System.currentTimeMillis()
-                        else handle(text, onEvent)
+                        else heldSeen = handle(text, heldSeen, onEvent)
                     }
                 }
                 heartbeat.cancel()
@@ -185,10 +189,20 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         }.toString()
     }
 
-    private fun handle(text: String, onEvent: (RelayEvent) -> Unit) {
-        val frame = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return
+    /** Handles one frame, returning whether the relay has reported what it holds. */
+    private fun handle(text: String, heldSeen: Boolean, onEvent: (RelayEvent) -> Unit): Boolean {
+        val frame = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+            ?: return heldSeen
         when ((frame["t"] as? JsonPrimitive)?.content) {
+            "held" -> {
+                val seq = runCatching { frame["n"]?.jsonPrimitive?.long }.getOrNull() ?: 0L
+                onEvent(RelayEvent.Held(seq))
+                return true
+            }
             "ops" -> {
+                // A relay that predates held answers the hello with ops alone, so it is
+                // treated as holding nothing and gets everything re-sent.
+                if (!heldSeen) onEvent(RelayEvent.Held(0L))
                 // Parsed per record: a seq wider than Int used to throw out of the whole
                 // mapNotNull, unwind consumeEach and tear the socket down, rather than
                 // costing the one record that carried it.
@@ -204,9 +218,11 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                     }.getOrNull()
                 }
                 onEvent(RelayEvent.Records(records))
+                return true
             }
             "err" -> onEvent(RelayEvent.Failed(frame["c"]?.jsonPrimitive?.content ?: "error"))
         }
+        return heldSeen
     }
 }
 
