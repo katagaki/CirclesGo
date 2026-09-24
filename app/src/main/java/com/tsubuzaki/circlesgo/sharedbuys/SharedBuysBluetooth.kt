@@ -47,6 +47,8 @@ private const val MTU = 247
 private const val REFRESH_INTERVAL_MS = 30_000L
 private const val MAX_PENDING_RESPONSES = 16
 private const val HANDSHAKE_DEADLINE_MS = 10_000L
+private const val MAX_WRITE_RETRIES = 5
+private const val WRITE_RETRY_DELAY_MS = 50L
 private val CLIENT_CONFIG_UUID: UUID =
     UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -73,6 +75,7 @@ class SharedBuysBluetooth(private val context: Context) {
     private val pendingNotifies = ArrayDeque<Pair<ByteArray, BluetoothDevice>>()
     private val writeQueues = mutableMapOf<String, ArrayDeque<ByteArray>>()
     private val writing = mutableSetOf<String>()
+    private val writeRetries = mutableMapOf<String, Int>()
     private val peerDigests = mutableMapOf<String, ByteArray>()
     private val handler = Handler(Looper.getMainLooper())
     private var advertisedWindow: Long? = null
@@ -146,6 +149,7 @@ class SharedBuysBluetooth(private val context: Context) {
         pendingNotifies.clear()
         writeQueues.clear()
         writing.clear()
+        writeRetries.clear()
         peerDigests.clear()
         challenges.clear()
         responses.clear()
@@ -216,9 +220,23 @@ class SharedBuysBluetooth(private val context: Context) {
                 }
             }
         }.getOrDefault(false)
-        if (!sent) {
-            writing.remove(address)
+        if (sent) {
+            writeRetries.remove(address)
+            return
         }
+        writing.remove(address)
+        // A refused write (the stack is busy) used to drop the chunk, so the message could
+        // never reassemble, and nothing pumped the queue again until the next send. The
+        // chunk goes back to the front and is retried shortly; one the stack keeps
+        // refusing is dropped so the rest of the queue can move.
+        val attempts = (writeRetries[address] ?: 0) + 1
+        if (attempts > MAX_WRITE_RETRIES) {
+            writeRetries.remove(address)
+        } else {
+            writeRetries[address] = attempts
+            queue.addFirst(frame)
+        }
+        handler.postDelayed({ if (clients[address] === gatt) pumpWrites(gatt) }, WRITE_RETRY_DELAY_MS)
     }
 
     private fun publishService() {
@@ -334,6 +352,7 @@ class SharedBuysBluetooth(private val context: Context) {
         val wasVerified = verifiedClients.remove(address)
         writeQueues.remove(address)
         writing.remove(address)
+        writeRetries.remove(address)
         peerDigests.remove(address)
         challenges.remove(address)
         onEvent?.invoke(BluetoothEvent.PeerCount(peerCount))
