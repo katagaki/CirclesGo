@@ -770,8 +770,15 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         if (fresh.isEmpty()) return
         val keys = keys(key)
         scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val opened = fresh.mapNotNull { open(it, keys, room) }
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { adopt(opened) }
+            val unopenable = mutableListOf<String>()
+            val opened = fresh.mapNotNull { record ->
+                open(record, keys, room).also { if (it == null) unopenable.add("${record.device}#${record.seq}") }
+            }
+            // The log is Compose state, so failures are noted back on the main thread.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                unopenable.forEach { note("could not open $it") }
+                adopt(opened)
+            }
         }
     }
 
@@ -781,8 +788,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         return SharedBuysKeys(sessionKey).also { keyCache = sessionKey to it }
     }
 
+    /** Verifies and decrypts one record. Pure, so it is safe on any thread. */
     private fun open(record: RelayRecord, keys: SharedBuysKeys, room: String): SharedBuyChange? {
-        val identifier = "${record.device}#${record.seq}"
         // Whoever handed us this record — the relay, or a peer over Bluetooth — is not
         // trusted to have authored it. Check the tag before it enters the log.
         val authentic = runCatching {
@@ -793,19 +800,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 keys.relayAuth
             ).contentEquals(record.tag.fromBase64Url())
         }.getOrDefault(false)
-        if (!authentic) {
-            note("bad tag on $identifier")
-            return null
-        }
+        if (!authentic) return null
         val payload = runCatching {
             val blob = record.blob.fromBase64Url()
             val plaintext = SharedBuysCrypto.open(blob, keys.content, room, record.device, record.seq)
             json.decodeFromString<SharedBuyPayload>(String(plaintext))
-        }.getOrNull()
-        if (payload == null) {
-            note("could not open $identifier")
-            return null
-        }
+        }.getOrNull() ?: return null
         return SharedBuyChange(record.device, record.seq, payload)
     }
 
