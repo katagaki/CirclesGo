@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
 }
 
 fun loadProperties(filename: String): Map<String, String> {
@@ -29,7 +30,7 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 5
-        versionName = "108.1"
+        versionName = "109.1"
     }
 
     signingConfigs {
@@ -86,8 +87,17 @@ dependencies {
     // Ktor HTTP client
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.websockets)
+    implementation(libs.zxing.core)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
+
+    // Google Play Services (QR code scanner for Guest Mode)
+    implementation(libs.play.services.code.scanner)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     // AndroidX Browser (Custom Tabs)
     implementation(libs.browser)

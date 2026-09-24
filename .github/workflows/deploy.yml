@@ -30,6 +30,9 @@ jobs:
       - name: Create OpenID.json
         run: echo '${{ secrets.OPENID_JSON }}' > app/src/main/assets/OpenID.json
 
+      - name: Create Relays.json
+        run: echo '${{ secrets.RELAYS_JSON }}' > app/src/main/assets/Relays.json
+
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > ${{ runner.temp }}/keystore.jks
 
