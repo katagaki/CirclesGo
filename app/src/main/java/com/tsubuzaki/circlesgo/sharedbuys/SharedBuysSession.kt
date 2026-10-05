@@ -701,7 +701,9 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             is RelayEvent.Failed -> {
                 status = "offline (${event.reason})"
                 note("failed: ${event.reason}")
-                if (event.reason != STORAGE_FULL_SLUG) scheduleReconnect()
+                if (event.reason != STORAGE_FULL_SLUG && event.reason != UNATTESTED_SLUG) {
+                    scheduleReconnect()
+                }
             }
             is RelayEvent.Closed -> {
                 status = "offline (closed ${event.code})"

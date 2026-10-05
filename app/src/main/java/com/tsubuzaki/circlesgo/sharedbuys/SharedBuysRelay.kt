@@ -59,11 +59,14 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
     private val json = Json { ignoreUnknownKeys = true }
     private var session: io.ktor.websocket.WebSocketSession? = null
     private var job: Job? = null
+    private var sentEvidence = false
+    private var suppressClose = false
 
     fun connect(endpoint: Endpoint, onEvent: (RelayEvent) -> Unit) {
         disconnect()
         job = scope.launch {
             runCatching {
+                suppressClose = false
                 val hello = helloFrame(endpoint)
                 val socket = client.webSocketSession("${endpoint.baseUrl}/r/${endpoint.roomId}")
                 session = socket
@@ -91,7 +94,9 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                     }
                 }
                 heartbeat.cancel()
-                onEvent(RelayEvent.Closed(socket.closeReason.await()?.code?.toInt() ?: 1006))
+                if (!suppressClose) {
+                    onEvent(RelayEvent.Closed(socket.closeReason.await()?.code?.toInt() ?: 1006))
+                }
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
                     onEvent(RelayEvent.Failed(it.message ?: "socket error"))
@@ -177,6 +182,7 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             endpoint.deviceId,
             timestamp
         )
+        sentEvidence = evidence != null
         return buildJsonObject {
             put("t", "hello")
             put("d", endpoint.deviceId)
@@ -196,6 +202,22 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             }
             evidence?.let { put("at", it) }
         }.toString()
+    }
+
+    /**
+     * Maps a relay error slug, taking the permanent case out of the retry loop.
+     *
+     * UNATTESTED_SLUG replaces auth when we sent no attestation and the relay demanded
+     * one: Play has nothing to say about this device, so reconnecting would be refused
+     * identically every 30 seconds for the rest of the room's life. The close that
+     * follows is swallowed so the session sees one terminal event.
+     */
+    private fun errorSlug(code: String): String {
+        if (code != "auth") return code
+        scope.launch { SharedBuysAttestation.invalidate() }
+        if (sentEvidence) return code
+        suppressClose = true
+        return UNATTESTED_SLUG
     }
 
     /** Handles one frame, returning whether the relay has reported what it holds. */
@@ -229,11 +251,7 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                 onEvent(RelayEvent.Records(records))
                 return true
             }
-            "err" -> {
-                val code = frame["c"]?.jsonPrimitive?.content ?: "error"
-                if (code == "auth") scope.launch { SharedBuysAttestation.invalidate() }
-                onEvent(RelayEvent.Failed(code))
-            }
+            "err" -> onEvent(RelayEvent.Failed(errorSlug(frame["c"]?.jsonPrimitive?.content ?: "error")))
         }
         return heldSeen
     }
@@ -244,6 +262,8 @@ private fun List<kotlinx.serialization.json.JsonElement>?.orEmpty() =
 
     private fun JsonObject.stringOrNull(key: String): String? =
     (this[key] as? JsonPrimitive)?.content
+
+const val UNATTESTED_SLUG = "unattested"
 
 private const val HEARTBEAT_INTERVAL_MS = 240_000L
 private const val HEARTBEAT_TIMEOUT_MS = 30_000L
