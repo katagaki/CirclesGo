@@ -49,6 +49,10 @@ private const val MAX_PENDING_RESPONSES = 16
 private const val HANDSHAKE_DEADLINE_MS = 10_000L
 private const val MAX_WRITE_RETRIES = 5
 private const val WRITE_RETRY_DELAY_MS = 50L
+private const val MAX_NOTIFY_RETRIES = 5
+private const val NOTIFY_RETRY_DELAY_MS = 50L
+private const val ADVERTISE_RETRY_DELAY_MS = 500L
+private const val ADVERTISE_RETRY_MAX_DELAY_MS = 8_000L
 private val CLIENT_CONFIG_UUID: UUID =
     UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
@@ -76,9 +80,14 @@ class SharedBuysBluetooth(private val context: Context) {
     private val writeQueues = mutableMapOf<String, ArrayDeque<ByteArray>>()
     private val writing = mutableSetOf<String>()
     private val writeRetries = mutableMapOf<String, Int>()
+    private var notifyRetries = 0
     private val peerDigests = mutableMapOf<String, ByteArray>()
     private val handler = Handler(Looper.getMainLooper())
+    /** The window whose advertisement the stack has confirmed is on the air. */
     private var advertisedWindow: Long? = null
+    /** The window of the advertisement we last handed the stack, until it answers. */
+    private var pendingAdvertisedWindow: Long? = null
+    private var advertiseAttempts = 0
     /** The room tags a peer may advertise, recomputed only when the window turns. */
     private var tagCache: Pair<Long, List<ByteArray>>? = null
 
@@ -133,7 +142,12 @@ class SharedBuysBluetooth(private val context: Context) {
 
     fun stop() {
         handler.removeCallbacks(refresh)
+        handler.removeCallbacks(retryAdvertise)
+        handler.removeCallbacks(retryNotifies)
         advertisedWindow = null
+        pendingAdvertisedWindow = null
+        advertiseAttempts = 0
+        notifyRetries = 0
         runCatching { adapter?.bluetoothLeAdvertiser?.stopAdvertising(advertiseCallback) }
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         clients.values.forEach { runCatching { it.close() } }
@@ -269,8 +283,14 @@ class SharedBuysBluetooth(private val context: Context) {
     private fun advertise() {
         val key = sessionKey ?: return
         val advertiser = adapter?.bluetoothLeAdvertiser ?: return
+        handler.removeCallbacks(retryAdvertise)
         runCatching { advertiser.stopAdvertising(advertiseCallback) }
-        advertisedWindow = SharedBuysProfile.window()
+        // The window is only claimed once the stack confirms the advertisement is up.
+        // Claiming it here meant a refused start — ALREADY_STARTED is easy to hit, since
+        // every ingested change restarts advertising to carry the new digest — left the
+        // device silently off the air until the window turned, up to 15 minutes later.
+        advertisedWindow = null
+        pendingAdvertisedWindow = SharedBuysProfile.window()
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
@@ -290,10 +310,26 @@ class SharedBuysBluetooth(private val context: Context) {
             )
             .setIncludeDeviceName(false)
             .build()
-        runCatching {
+        val handed = runCatching {
             advertiser.startAdvertising(settings, data, scanResponse, advertiseCallback)
-        }
+        }.isSuccess
+        if (!handed) scheduleAdvertiseRetry()
     }
+
+    /**
+     * Tries again after a refused start, backing off so a stack that is out of
+     * advertising sets is not hammered.
+     */
+    private fun scheduleAdvertiseRetry() {
+        if (sessionKey == null) return
+        advertiseAttempts += 1
+        val delay = (ADVERTISE_RETRY_DELAY_MS shl (advertiseAttempts - 1).coerceAtMost(8))
+            .coerceAtMost(ADVERTISE_RETRY_MAX_DELAY_MS)
+        handler.removeCallbacks(retryAdvertise)
+        handler.postDelayed(retryAdvertise, delay)
+    }
+
+    private val retryAdvertise = Runnable { if (sessionKey != null) advertise() }
 
     /**
      * The advertised tag is only valid for its window, so it has to be reissued before
@@ -348,7 +384,10 @@ class SharedBuysBluetooth(private val context: Context) {
         clients.remove(address)?.let { runCatching { it.close() } }
         inboxes.remove(address)
         clientReassemblers.remove(address)
-        mtus.remove(address)
+        // The MTU belongs to the ACL link, which the server side may still be using:
+        // dropping it for a peer still connected to our server collapsed its notify
+        // chunks to the 23 byte default.
+        if (subscribers.none { it.address == address }) mtus.remove(address)
         val wasVerified = verifiedClients.remove(address)
         writeQueues.remove(address)
         writing.remove(address)
@@ -405,21 +444,56 @@ class SharedBuysBluetooth(private val context: Context) {
         val sent = runCatching {
             server?.notifyCharacteristicChanged(device, characteristic, false) == true
         }.getOrDefault(false)
-        if (!sent) pendingNotifies.addLast(frame to device)
+        if (!sent) {
+            pendingNotifies.addLast(frame to device)
+            scheduleNotifyFlush()
+        }
     }
 
+    /**
+     * Drains the queue, with a timer behind it.
+     *
+     * onNotificationSent only fires for a notification the stack accepted, so a refused
+     * one left nothing to drive the queue again: the first refusal wedged every later
+     * notify behind a queue nobody drained, handshake responses included, and no central
+     * could verify against us again for the rest of the session. The write path already
+     * retried on a delay; this is the same treatment.
+     */
     private fun flushNotifies() {
         val characteristic = outbox ?: return
+        handler.removeCallbacks(retryNotifies)
         while (pendingNotifies.isNotEmpty()) {
             val (frame, device) = pendingNotifies.first()
             characteristic.value = frame
             val sent = runCatching {
                 server?.notifyCharacteristicChanged(device, characteristic, false) == true
             }.getOrDefault(false)
-            if (!sent) return
+            if (!sent) {
+                scheduleNotifyFlush()
+                return
+            }
             pendingNotifies.removeFirst()
         }
+        // Also covers a queue emptied by a disconnect rather than by a send.
+        notifyRetries = 0
     }
+
+    private fun scheduleNotifyFlush() {
+        val attempts = notifyRetries + 1
+        if (attempts > MAX_NOTIFY_RETRIES) {
+            // One the stack keeps refusing is dropped so the rest of the queue can move,
+            // rather than holding the whole server side silent for one frame.
+            notifyRetries = 0
+            pendingNotifies.removeFirstOrNull()
+            if (pendingNotifies.isEmpty()) return
+        } else {
+            notifyRetries = attempts
+        }
+        handler.removeCallbacks(retryNotifies)
+        handler.postDelayed(retryNotifies, NOTIFY_RETRY_DELAY_MS)
+    }
+
+    private val retryNotifies = Runnable { if (sessionKey != null) flushNotifies() }
 
     private fun deliverFromServer(address: String, frame: ByteArray) {
         val reassembler = serverReassemblers.getOrPut(address) { SharedBuysFraming.Reassembler() }
@@ -494,8 +568,15 @@ class SharedBuysBluetooth(private val context: Context) {
     }
 
     private val advertiseCallback = object : AdvertiseCallback() {
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) = confined {
+            advertisedWindow = pendingAdvertisedWindow
+            advertiseAttempts = 0
+        }
+
         override fun onStartFailure(errorCode: Int) = confined {
+            advertisedWindow = null
             onEvent?.invoke(BluetoothEvent.Unavailable("advertise failed $errorCode"))
+            scheduleAdvertiseRetry()
         }
     }
 
@@ -576,6 +657,13 @@ class SharedBuysBluetooth(private val context: Context) {
             status: Int
         ) = confined {
             if (handshakeKey == null) return@confined
+            // Without notifications enabled the peripheral has no way to answer, so the
+            // link is dead: drop it now rather than holding a GATT slot until the
+            // handshake deadline expires.
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                reject(gatt)
+                return@confined
+            }
             val challenge = SharedBuysHandshake.nonce()
             challenges[gatt.device.address] = challenge
             enqueueWrite(gatt, SharedBuysHandshake.challenge(challenge))
