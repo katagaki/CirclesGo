@@ -12,6 +12,7 @@ kotlin = "2.4.20"
 ktor = "3.5.2"
 lifecycle = "2.11.0"
 material3 = "1.5.0-alpha28"
+play-integrity = "1.6.0"
 serialization = "1.11.0"
 
 [libraries]
@@ -27,6 +28,9 @@ zxing-core = { module = "com.google.zxing:core", version = "3.5.4" }
 
 # Google Play Services (QR code scanner for Guest Mode)
 play-services-code-scanner = { module = "com.google.android.gms:play-services-code-scanner", version = "16.1.0" }
+
+# Play Integrity (device attestation for the relay)
+play-integrity = { module = "com.google.android.play:integrity", version.ref = "play-integrity" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 

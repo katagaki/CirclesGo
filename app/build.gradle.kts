@@ -21,6 +21,13 @@ fun loadProperties(filename: String): Map<String, String> {
     return properties
 }
 
+fun playProjectNumber(): String {
+    val file = file("google-services.json")
+    if (!file.exists()) return ""
+    return Regex("\"project_number\"\\s*:\\s*\"(\\d+)\"")
+        .find(file.readText())?.groupValues?.get(1) ?: ""
+}
+
 android {
     namespace = "com.tsubuzaki.circlesgo"
     compileSdk = 37
@@ -31,6 +38,7 @@ android {
         targetSdk = 37
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 5
         versionName = "109.1"
+        buildConfigField("String", "PLAY_PROJECT_NUMBER", "\"${playProjectNumber()}\"")
     }
 
     signingConfigs {
@@ -94,6 +102,9 @@ dependencies {
 
     // Google Play Services (QR code scanner for Guest Mode)
     implementation(libs.play.services.code.scanner)
+
+    // Play Integrity (device attestation for the relay)
+    implementation(libs.play.integrity)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

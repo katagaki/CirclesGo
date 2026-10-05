@@ -1,5 +1,6 @@
 package com.tsubuzaki.circlesgo.sharedbuys
 
+import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
@@ -42,7 +43,7 @@ sealed interface RelayEvent {
     data class Closed(val code: Int) : RelayEvent
 }
 
-class SharedBuysRelay(private val scope: CoroutineScope) {
+class SharedBuysRelay(private val context: Context, private val scope: CoroutineScope) {
 
     data class Endpoint(
         val baseUrl: String,
@@ -63,9 +64,10 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         disconnect()
         job = scope.launch {
             runCatching {
+                val hello = helloFrame(endpoint)
                 val socket = client.webSocketSession("${endpoint.baseUrl}/r/${endpoint.roomId}")
                 session = socket
-                socket.send(Frame.Text(helloFrame(endpoint)))
+                socket.send(Frame.Text(hello))
                 onEvent(RelayEvent.Connected)
                 var lastPongAt = 0L
                 var heldSeen = false
@@ -161,7 +163,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         return host in listOf("localhost", "127.0.0.1", "::1", "10.0.2.2")
     }
 
-    private fun helloFrame(endpoint: Endpoint): String {
+    private suspend fun helloFrame(endpoint: Endpoint): String {
         val relayAuthKey = SharedBuysCrypto.derive(
             SharedBuysCrypto.RELAY_AUTH_INFO,
             endpoint.sessionKey
@@ -169,6 +171,12 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
         val timestamp = System.currentTimeMillis() / 1000
         val tag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, relayAuthKey)
         val deviceTag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, endpoint.deviceAuthKey)
+        val evidence = SharedBuysAttestation.evidence(
+            context,
+            endpoint.roomId,
+            endpoint.deviceId,
+            timestamp
+        )
         return buildJsonObject {
             put("t", "hello")
             put("d", endpoint.deviceId)
@@ -186,6 +194,7 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                     put("tk", token)
                 })
             }
+            evidence?.let { put("at", it) }
         }.toString()
     }
 
@@ -220,7 +229,11 @@ class SharedBuysRelay(private val scope: CoroutineScope) {
                 onEvent(RelayEvent.Records(records))
                 return true
             }
-            "err" -> onEvent(RelayEvent.Failed(frame["c"]?.jsonPrimitive?.content ?: "error"))
+            "err" -> {
+                val code = frame["c"]?.jsonPrimitive?.content ?: "error"
+                if (code == "auth") scope.launch { SharedBuysAttestation.invalidate() }
+                onEvent(RelayEvent.Failed(code))
+            }
         }
         return heldSeen
     }

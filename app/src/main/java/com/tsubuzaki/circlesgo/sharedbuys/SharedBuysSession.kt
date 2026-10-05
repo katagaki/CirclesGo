@@ -15,7 +15,7 @@ import java.util.UUID
 class SharedBuysSession(private val context: Context, private val scope: CoroutineScope) {
 
     private val store = SharedBuysStore(context)
-    private val relay = SharedBuysRelay(scope)
+    private val relay = SharedBuysRelay(context, scope)
     private val bluetooth = SharedBuysBluetooth(context)
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 

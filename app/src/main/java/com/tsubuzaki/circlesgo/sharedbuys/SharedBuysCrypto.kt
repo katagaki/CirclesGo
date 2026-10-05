@@ -39,15 +39,35 @@ object SharedBuysCrypto {
         return mac.doFinal().copyOf(32)
     }
 
-    fun helloTag(deviceId: String, timestamp: Long, relayAuthKey: ByteArray): ByteArray {
+    fun helloInput(deviceId: String, timestamp: Long): ByteArray {
         val input = ByteBuffer.allocate(5 + 1 + deviceId.length + 1 + 8)
         input.put("hello".toByteArray())
         input.put(0)
         input.put(deviceId.toByteArray())
         input.put(0)
         input.putLong(timestamp)
-        return hmac(relayAuthKey, input.array()).copyOf(TAG_LENGTH)
+        return input.array()
     }
+
+    fun helloTag(deviceId: String, timestamp: Long, relayAuthKey: ByteArray): ByteArray =
+        hmac(relayAuthKey, helloInput(deviceId, timestamp)).copyOf(TAG_LENGTH)
+
+    /** The client data an attestation is bound to, matching the relay byte for byte. */
+    fun attestInput(deviceId: String, timestamp: Long, roomId: String): ByteArray {
+        val hello = helloInput(deviceId, timestamp)
+        val input = ByteBuffer.allocate(6 + 1 + roomId.length + 1 + hello.size)
+        input.put("attest".toByteArray())
+        input.put(0)
+        input.put(roomId.toByteArray())
+        input.put(0)
+        input.put(hello)
+        return input.array()
+    }
+
+    fun requestHash(deviceId: String, timestamp: Long, roomId: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(attestInput(deviceId, timestamp, roomId))
+            .toBase64Url()
 
     fun recordTag(deviceId: String, seq: Long, blob: ByteArray, relayAuthKey: ByteArray): ByteArray {
         val input = ByteBuffer.allocate(deviceId.length + 1 + 8 + blob.size)
