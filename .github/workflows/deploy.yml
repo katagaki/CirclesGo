@@ -57,4 +57,4 @@ jobs:
           packageName: com.tsubuzaki.circlesgo
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: internal
-          status: draft
+          status: completed
