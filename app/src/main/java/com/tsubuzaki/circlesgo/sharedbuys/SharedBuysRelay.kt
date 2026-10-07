@@ -3,6 +3,7 @@ package com.tsubuzaki.circlesgo.sharedbuys
 import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.Frame
@@ -55,7 +56,10 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         val pushToken: String? = null
     )
 
-    private val client = HttpClient(OkHttp) { install(WebSockets) }
+    private val client = HttpClient(OkHttp) {
+        expectSuccess = true
+        install(WebSockets)
+    }
     private val json = Json { ignoreUnknownKeys = true }
     private var session: io.ktor.websocket.WebSocketSession? = null
     private var job: Job? = null
@@ -68,9 +72,10 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             runCatching {
                 suppressClose = false
                 val hello = helloFrame(endpoint)
-                val socket = client.webSocketSession("${endpoint.baseUrl}/r/${endpoint.roomId}")
+                val socket = client.webSocketSession("${endpoint.baseUrl}/r/${endpoint.roomId}") {
+                    headers.append("X-Circles-Hello", hello.toByteArray(Charsets.UTF_8).toBase64Url())
+                }
                 session = socket
-                socket.send(Frame.Text(hello))
                 onEvent(RelayEvent.Connected)
                 var lastPongAt = 0L
                 var heldSeen = false
@@ -99,7 +104,9 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                 }
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
-                    onEvent(RelayEvent.Failed(it.message ?: "socket error"))
+                    val code = if (it is ResponseException && it.response.status.value == 401) errorSlug("auth")
+                    else it.message ?: "socket error"
+                    onEvent(RelayEvent.Failed(code))
                 }
             }
         }
