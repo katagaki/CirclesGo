@@ -17,7 +17,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 /**
- * Play Integrity evidence for the relay's hello frame.
+ * Play Integrity evidence for the relay's X-Circles-Attest header.
  *
  * The token provider is the expensive half — it warms up against Google's servers once
  * and then mints a token per request — so it is prepared lazily and kept. It goes stale
@@ -32,9 +32,9 @@ object SharedBuysAttestation {
     private val mutex = Mutex()
     private var provider: StandardIntegrityTokenProvider? = null
 
-    suspend fun evidence(context: Context, roomId: String, deviceId: String, timestamp: Long): JsonObject? {
+    suspend fun evidence(context: Context, roomId: String, hello: ByteArray): JsonObject? {
         val project = BuildConfig.PLAY_PROJECT_NUMBER.toLongOrNull() ?: return null
-        val hash = SharedBuysCrypto.requestHash(deviceId, timestamp, roomId)
+        val hash = SharedBuysCrypto.requestHash(roomId, hello)
         val token = token(context, project, hash) ?: return null
         return buildJsonObject {
             put("t", "playintegrity")

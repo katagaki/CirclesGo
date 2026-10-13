@@ -71,9 +71,14 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         job = scope.launch {
             runCatching {
                 suppressClose = false
-                val hello = helloFrame(endpoint)
+                val hello = helloFrame(endpoint).toByteArray(Charsets.UTF_8)
+                val evidence = SharedBuysAttestation.evidence(context, endpoint.roomId, hello)
+                sentEvidence = evidence != null
                 val socket = client.webSocketSession("${endpoint.baseUrl}/r/${endpoint.roomId}") {
-                    headers.append("X-Circles-Hello", hello.toByteArray(Charsets.UTF_8).toBase64Url())
+                    headers.append("X-Circles-Hello", hello.toBase64Url())
+                    evidence?.let {
+                        headers.append("X-Circles-Attest", it.toString().toByteArray(Charsets.UTF_8).toBase64Url())
+                    }
                 }
                 session = socket
                 onEvent(RelayEvent.Connected)
@@ -104,8 +109,8 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                 }
             }.onFailure {
                 if (it !is kotlinx.coroutines.CancellationException) {
-                    val code = if (it is ResponseException && it.response.status.value == 401) errorSlug("auth")
-                    else it.message ?: "socket error"
+                    val refusal = (it as? ResponseException)?.let { error -> REFUSAL_SLUGS[error.response.status.value] }
+                    val code = refusal?.let(::errorSlug) ?: it.message ?: "socket error"
                     onEvent(RelayEvent.Failed(code))
                 }
             }
@@ -175,7 +180,7 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         return host in listOf("localhost", "127.0.0.1", "::1", "10.0.2.2")
     }
 
-    private suspend fun helloFrame(endpoint: Endpoint): String {
+    private fun helloFrame(endpoint: Endpoint): String {
         val relayAuthKey = SharedBuysCrypto.derive(
             SharedBuysCrypto.RELAY_AUTH_INFO,
             endpoint.sessionKey
@@ -183,13 +188,6 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         val timestamp = System.currentTimeMillis() / 1000
         val tag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, relayAuthKey)
         val deviceTag = SharedBuysCrypto.helloTag(endpoint.deviceId, timestamp, endpoint.deviceAuthKey)
-        val evidence = SharedBuysAttestation.evidence(
-            context,
-            endpoint.roomId,
-            endpoint.deviceId,
-            timestamp
-        )
-        sentEvidence = evidence != null
         return buildJsonObject {
             put("t", "hello")
             put("d", endpoint.deviceId)
@@ -207,20 +205,20 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                     put("tk", token)
                 })
             }
-            evidence?.let { put("at", it) }
         }.toString()
     }
 
     /**
      * Maps a relay error slug, taking the permanent case out of the retry loop.
      *
-     * UNATTESTED_SLUG replaces auth when we sent no attestation and the relay demanded
+     * UNATTESTED_SLUG replaces attest when we sent no attestation and the relay demanded
      * one: Play has nothing to say about this device, so reconnecting would be refused
      * identically every 30 seconds for the rest of the room's life. The close that
-     * follows is swallowed so the session sees one terminal event.
+     * follows is swallowed so the session sees one terminal event. Only a refused
+     * attestation drops the warmed-up provider; a bad or stale hello says nothing about it.
      */
     private fun errorSlug(code: String): String {
-        if (code != "auth") return code
+        if (code != "attest") return code
         scope.launch { SharedBuysAttestation.invalidate() }
         if (sentEvidence) return code
         suppressClose = true
@@ -271,6 +269,9 @@ private fun List<kotlinx.serialization.json.JsonElement>?.orEmpty() =
     (this[key] as? JsonPrimitive)?.content
 
 const val UNATTESTED_SLUG = "unattested"
+
+/** Upgrade refusals by status: 403 is the attestation, 401 the hello itself. */
+private val REFUSAL_SLUGS = mapOf(401 to "auth", 403 to "attest", 429 to "rate")
 
 private const val HEARTBEAT_INTERVAL_MS = 240_000L
 private const val HEARTBEAT_TIMEOUT_MS = 30_000L

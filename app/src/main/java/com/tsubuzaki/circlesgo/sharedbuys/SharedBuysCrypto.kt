@@ -52,9 +52,13 @@ object SharedBuysCrypto {
     fun helloTag(deviceId: String, timestamp: Long, relayAuthKey: ByteArray): ByteArray =
         hmac(relayAuthKey, helloInput(deviceId, timestamp)).copyOf(TAG_LENGTH)
 
-    /** The client data an attestation is bound to, matching the relay byte for byte. */
-    fun attestInput(deviceId: String, timestamp: Long, roomId: String): ByteArray {
-        val hello = helloInput(deviceId, timestamp)
+    /**
+     * The client data an attestation is bound to, matching the relay byte for byte.
+     *
+     * hello is the exact UTF-8 JSON sent in X-Circles-Hello, so the attestation covers
+     * every field of it — push token and device key included.
+     */
+    fun attestInput(roomId: String, hello: ByteArray): ByteArray {
         val input = ByteBuffer.allocate(6 + 1 + roomId.length + 1 + hello.size)
         input.put("attest".toByteArray())
         input.put(0)
@@ -64,9 +68,9 @@ object SharedBuysCrypto {
         return input.array()
     }
 
-    fun requestHash(deviceId: String, timestamp: Long, roomId: String): String =
+    fun requestHash(roomId: String, hello: ByteArray): String =
         java.security.MessageDigest.getInstance("SHA-256")
-            .digest(attestInput(deviceId, timestamp, roomId))
+            .digest(attestInput(roomId, hello))
             .toBase64Url()
 
     fun recordTag(deviceId: String, seq: Long, blob: ByteArray, relayAuthKey: ByteArray): ByteArray {
