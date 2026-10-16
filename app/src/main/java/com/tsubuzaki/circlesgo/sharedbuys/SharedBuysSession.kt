@@ -689,9 +689,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             }
             is RelayEvent.Held -> {
                 // Our own history coming back from the relay means a save was lost;
-                // never reuse a sequence number it already holds.
-                lastSeq = maxOf(lastSeq, event.seq)
-                resend(event.seq)
+                // never reuse a sequence number it already holds. held carries no tag, so
+                // it is capped at what a room can hold: a relay that lies cannot push
+                // lastSeq out of reach and strand every later write on this device.
+                val held = event.seq.coerceIn(0L, MAX_STORED_RECORDS)
+                lastSeq = maxOf(lastSeq, held)
+                resend(held)
             }
             is RelayEvent.Records -> ingest(event.records)
             // The relay refuses writes once a room holds 500 records, and closes the
@@ -908,6 +911,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         private const val RESEND_PAGE_DELAY_MS = 600L
         private const val STORAGE_FULL_SLUG = "storage"
         private const val STORAGE_FULL_CODE = 4005
+        private const val MAX_STORED_RECORDS = 500L
 
     }
 }
