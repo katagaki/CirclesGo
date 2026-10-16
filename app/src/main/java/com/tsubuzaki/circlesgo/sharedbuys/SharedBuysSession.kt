@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
@@ -56,6 +57,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     var ownerDevice: String? by mutableStateOf(null)
         private set
     private var isRekeying = false
+    private var signingKey = SharedBuysCrypto.newSigningKey()
     private var eventNumber = 0
     private var lastSeq = 0L
     private var clock = 0L
@@ -69,6 +71,11 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private val sealed = mutableMapOf<String, RelayRecord>()
     private var keyCache: Pair<ByteArray, SharedBuysKeys>? = null
     private var flushJob: kotlinx.coroutines.Job? = null
+    /**
+     * Batches are opened one at a time, so a device's MEMBER_JOINED is adopted before the
+     * records it signs are checked.
+     */
+    private val ingestLock = kotlinx.coroutines.sync.Mutex()
 
     val isActive: Boolean get() = sessionKey != null
 
@@ -266,11 +273,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         deviceAuthKey = snapshot.deviceAuthKey?.fromBase64Url() ?: SharedBuysCrypto.newDeviceAuthKey()
         agreementKey = runCatching {
             java.security.KeyPair(
-                SharedBuysCrypto.publicKey(snapshot.agreementPublicKey!!.fromBase64Url()),
+                SharedBuysCrypto.agreementPublicKey(snapshot.agreementPublicKey!!.fromBase64Url()),
                 SharedBuysCrypto.privateKey(snapshot.agreementKey!!.fromBase64Url())
             )
         }.getOrElse { SharedBuysCrypto.newAgreementKey() }
         ownerDevice = snapshot.ownerDevice
+        signingKey = snapshot.signingKey?.fromBase64Url() ?: SharedBuysCrypto.newSigningKey()
         eventNumber = snapshot.eventNumber
         lastSeq = snapshot.lastSeq
         changes.clear()
@@ -350,6 +358,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         agreementKey = SharedBuysCrypto.newAgreementKey()
         ownerDevice = owner
         eventNumber = event
+        signingKey = SharedBuysCrypto.newSigningKey()
         lastSeq = 0
         clock = 0
         changes.clear()
@@ -452,6 +461,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         relay.disconnect()
         sessionKey = null
         deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
+        signingKey = SharedBuysCrypto.newSigningKey()
         changes.clear()
         sealed.clear()
         invalidateFold()
@@ -554,7 +564,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
                 sendOverBluetooth(missing, peer)
                 if (peer !in wantedPeers && frame.vector != versionVector) sendWant(peer)
             }
-            is SharedBuysFrame.Changes -> ingest(frame.records, overBluetooth = true)
+            is SharedBuysFrame.Changes -> ingest(frame.records, viaBluetooth = true)
             null -> Unit
         }
     }
@@ -590,6 +600,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         checkHandshake(notConfused = SharedBuysHandshake.parse(frames.first()) == null)
         checkWire()
         checkRekey()
+        checkSignatures()
     }
 
     private fun checkRekey() {
@@ -598,7 +609,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val result = runCatching {
             val recipient = SharedBuysCrypto.privateKey(ByteArray(32) { (it + 1).toByte() })
             val ephemeral = java.security.KeyPair(
-                SharedBuysCrypto.publicKey(REKEY_EPHEMERAL_PUBLIC.fromHex()),
+                SharedBuysCrypto.agreementPublicKey(REKEY_EPHEMERAL_PUBLIC.fromHex()),
                 SharedBuysCrypto.privateKey(ByteArray(32) { (0x21 + it).toByte() })
             )
             val box = SharedBuysCrypto.sealRekey(
@@ -620,6 +631,55 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         note(
             "rekey vector ${if (result?.first == true) "ok" else "FAILED"} " +
                 "open ${if (result?.second == true) "ok" else "FAILED"}"
+        )
+    }
+
+    /**
+     * Checks the signature test vector both platforms share, and that a member signing as
+     * another device, or a device that never joined, is refused.
+     */
+    private fun checkSignatures() {
+        val room = SharedBuysCrypto.roomId(ByteArray(32) { it.toByte() })
+        val payload = SharedBuyPayload(12345, SharedBuyKind.SET_STATUS, "a1b2c3d4", 98765, value = 1)
+        val input = SharedBuysCrypto.signInput(room, "a1b2c3d4", 42, payload)
+        val seed = ByteArray(32) { (0x20 + it).toByte() }
+        val signature = SharedBuysCrypto.sign(input, seed)
+        val vector = input.toHex() == "636972636c65732d627579732f76312f7369676e00d82272e2a9501834ab4a2139c8dd043c" +
+            "a1b2c3d4000000000000002a00000000000030390000000000000001000000086131623263336434" +
+            "00000000000181cd00010000000000000001000000" &&
+            SharedBuysCrypto.publicKey(seed).toHex() ==
+            "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7" &&
+            signature.toHex() == "f2d23784ace1922d4c1de1309b8c92dec096802082acc71a40b77c66281fbe63" +
+            "3ea7a7f6304f98ba06295e7ecd0b66eac2c4230538613b66c85d4c31c26f200c"
+
+        fun signed(payload: SharedBuyPayload, device: String, seq: Long, key: ByteArray) = SharedBuyChange(
+            device,
+            seq,
+            payload.copy(
+                signature = SharedBuysCrypto.sign(
+                    SharedBuysCrypto.signInput(room, device, seq, payload),
+                    key
+                ).toBase64Url()
+            )
+        )
+        val member = SharedBuysCrypto.newSigningKey()
+        val forger = SharedBuysCrypto.newSigningKey()
+        val joined = SharedBuyPayload(
+            1, SharedBuyKind.MEMBER_JOINED, "-", 0, "a",
+            publicKey = SharedBuysCrypto.publicKey(member).toBase64Url()
+        )
+        val signers = SharedBuySigners(emptyList())
+        val unknown = !signers.admit(signed(payload, "a1b2c3d4", 2, member), room)
+        val pinned = signers.admit(signed(joined, "a1b2c3d4", 1, member), room)
+        val genuine = signers.admit(signed(payload, "a1b2c3d4", 2, member), room)
+        val forged = !signers.admit(signed(payload, "a1b2c3d4", 3, forger), room)
+        val stripped = !signers.admit(SharedBuyChange("a1b2c3d4", 4, payload), room)
+        val unsigned = signers.admit(SharedBuyChange("cafebabe", 1, joined.copy(publicKey = null)), room) &&
+            signers.admit(SharedBuyChange("cafebabe", 2, payload), room)
+        val policy = unknown && pinned && genuine && forged && stripped && unsigned
+        note(
+            "signature vector ${if (vector) "ok" else "FAILED"} " +
+                "policy ${if (policy) "ok" else "FAILED"}"
         )
     }
 
@@ -765,10 +825,20 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         }
         lastSeq += 1
         clock += 1
+        val publicKey = if (kind == SharedBuyKind.MEMBER_JOINED) {
+            SharedBuysCrypto.publicKey(signingKey).toBase64Url()
+        } else {
+            null
+        }
+        val unsigned = SharedBuyPayload(actor ?: actorPid, kind, itemId, circleId, text, value, space, clock, publicKey)
+        val signature = SharedBuysCrypto.sign(
+            SharedBuysCrypto.signInput(room, deviceId, lastSeq, unsigned),
+            signingKey
+        )
         val change = SharedBuyChange(
             device = deviceId,
             seq = lastSeq,
-            payload = SharedBuyPayload(actor ?: actorPid, kind, itemId, circleId, text, value, space, clock)
+            payload = unsigned.copy(signature = signature.toBase64Url())
         )
         changes.add(change)
         invalidateFold()
@@ -782,7 +852,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     /** Holds a record briefly so a burst of edits leaves as one frame. */
     private fun enqueue(record: RelayRecord) {
         outbox.add(record)
-        if (outbox.size >= RECORDS_PER_FRAME) {
+        if (outbox.size >= MAX_RECORDS_PER_FRAME) {
             flushOutbox()
             return
         }
@@ -825,9 +895,12 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             }
             is RelayEvent.Held -> {
                 // Our own history coming back from the relay means a save was lost;
-                // never reuse a sequence number it already holds.
-                lastSeq = maxOf(lastSeq, event.seq)
-                resend(event.seq)
+                // never reuse a sequence number it already holds. held carries no tag, so
+                // it is capped at what a room can hold: a relay that lies cannot push
+                // lastSeq out of reach and strand every later write on this device.
+                val held = event.seq.coerceIn(0L, MAX_STORED_RECORDS)
+                lastSeq = maxOf(lastSeq, held)
+                resend(held)
             }
             is RelayEvent.Records -> ingest(event.records)
             // The relay refuses writes once a room holds 500 records, and closes the
@@ -875,18 +948,18 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
      *
      * above is the gapless prefix the relay reported after hello. Re-sending the whole
      * history on every reconnect re-sealed and re-uploaded changes the relay only threw
-     * away as duplicates. Each page is sealed as it is sent, in frames the relay will
-     * accept.
+     * away as duplicates. Pages are frames the relay will accept, spaced out so a long
+     * history stays under its rate limit.
      */
     private fun resend(above: Long) {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val pages = changes.filter { it.device == deviceId && it.seq > above }
-            .chunked(RECORDS_PER_FRAME)
+        val pages = pages(
+            changes.filter { it.device == deviceId && it.seq > above }.mapNotNull { seal(it, key, room) }
+        )
         scope.launch {
             pages.forEachIndexed { index, page ->
-                val records = page.mapNotNull { seal(it, key, room) }
-                if (records.isNotEmpty()) relay.send(records) { event -> handle(event) }
+                relay.send(page) { event -> handle(event) }
                 if (index < pages.lastIndex) kotlinx.coroutines.delay(RESEND_PAGE_DELAY_MS)
             }
         }
@@ -898,27 +971,53 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
      * The Bluetooth path used to derive two keys, open GCM, mutate Compose state and
      * write SharedPreferences inline on a binder callback, blocking the BLE stack the
      * whole time. Opening is pure work over the batch, so it moves to a worker; only the
-     * append comes back to the main thread.
+     * append comes back to the main thread. Batches are opened one at a time, against the
+     * signers the log held when the batch began.
      */
-    private fun ingest(records: List<RelayRecord>, overBluetooth: Boolean = false) {
+    private fun ingest(records: List<RelayRecord>, viaBluetooth: Boolean = false) {
         val key = sessionKey ?: return
         val room = roomId ?: return
-        val known = changes.mapTo(mutableSetOf()) { it.id }
-        val fresh = records.filter { "${it.device}#${it.seq}" !in known }
-        if (fresh.isEmpty()) return
         val keys = keys(key)
-        scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val unopenable = mutableListOf<String>()
-            val opened = fresh.mapNotNull { record ->
-                open(record, keys, room).also { if (it == null) unopenable.add("${record.device}#${record.seq}") }
-            }.filter { !overBluetooth || SharedBuyKind.travelsOverBluetooth(it.payload.kind) }
-            // The log is Compose state, so failures are noted back on the main thread.
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                unopenable.forEach { note("could not open $it") }
+        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            ingestLock.withLock {
+                if (sessionKey?.contentEquals(key) != true) return@withLock
+                val known = changes.mapTo(mutableSetOf()) { it.id }
+                val fresh = records.filter { "${it.device}#${it.seq}" !in known }
+                if (fresh.isEmpty()) return@withLock
+                val signers = SharedBuySigners(changes.toList())
+                val unopenable = mutableListOf<String>()
+                val opened = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    open(fresh, keys, room, signers, viaBluetooth, unopenable)
+                }
+                if (sessionKey?.contentEquals(key) != true) return@withLock
+                unopenable.forEach { note("could not open or verify $it") }
                 adopt(opened)
             }
         }
     }
+
+    /**
+     * Opens a batch in (device, seq) order, so a MEMBER_JOINED pins its key before the
+     * records it signs are checked.
+     *
+     * Bluetooth only ever carries status flips, so anything else arriving that way is
+     * refused: it is how a member nearby would otherwise announce a key of their own for
+     * a device we have not heard join yet.
+     */
+    private fun open(
+        records: List<RelayRecord>,
+        keys: SharedBuysKeys,
+        room: String,
+        signers: SharedBuySigners,
+        viaBluetooth: Boolean,
+        unopenable: MutableList<String>
+    ): List<SharedBuyChange> =
+        records.sortedWith(compareBy({ it.device }, { it.seq })).mapNotNull { record ->
+            open(record, keys, room)?.takeIf {
+                (!viaBluetooth || SharedBuyKind.travelsOverBluetooth(it.payload.kind)) &&
+                    signers.admit(it, room)
+            }.also { if (it == null) unopenable.add("${record.device}#${record.seq}") }
+        }
 
     /** The room's record keys, derived once per session key instead of twice per record. */
     private fun keys(sessionKey: ByteArray): SharedBuysKeys {
@@ -1011,6 +1110,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             sessionKey = key.toBase64Url(),
             deviceId = deviceId,
             deviceAuthKey = deviceAuthKey.toBase64Url(),
+            signingKey = signingKey.toBase64Url(),
             eventNumber = eventNumber,
             lastSeq = lastSeq,
             changes = changes.toList(),
@@ -1033,9 +1133,6 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         const val GUEST_MODE_KEY = "Guest.IsActive"
         private const val GUEST_NICKNAME_KEY = "Guest.Nickname"
 
-        /** The relay refuses a frame carrying more than this (MAX_RECORDS_PER_FRAME). */
-        private const val RECORDS_PER_FRAME = 32
-
         /**
          * How long an outbound record waits for company before it is sent.
          *
@@ -1057,6 +1154,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         private const val REKEY_SEALED =
             "4968b067252cb291c8edd8244e1269fd7740abbf41ebf4e842663ebb" +
                 "0b89fbce886e51c8036b9e64d95c57379e5bcf35fac8aba9"
+        private const val MAX_STORED_RECORDS = 500L
 
     }
 }

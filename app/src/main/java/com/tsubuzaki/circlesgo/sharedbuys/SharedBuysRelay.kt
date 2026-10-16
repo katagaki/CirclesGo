@@ -125,7 +125,7 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         if (socket != null) {
             scope.launch {
                 runCatching {
-                    if (records.isNotEmpty()) socket.send(Frame.Text(opsFrame(records)))
+                    pages(records).forEach { socket.send(Frame.Text(opsFrame(it))) }
                     socket.close()
                 }
             }
@@ -150,10 +150,13 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             return
         }
         if (records.isEmpty()) return
-        val frame = opsFrame(records)
+        val frames = pages(records).map(::opsFrame)
         scope.launch {
-            runCatching { socket.send(Frame.Text(frame)) }
-                .onFailure { onEvent(RelayEvent.Failed("send: ${it.message}")) }
+            for (frame in frames) {
+                val sent = runCatching { socket.send(Frame.Text(frame)) }
+                    .onFailure { onEvent(RelayEvent.Failed("send: ${it.message}")) }
+                if (sent.isFailure) break
+            }
         }
     }
 
@@ -285,3 +288,36 @@ private val REFUSAL_SLUGS = mapOf(401 to "auth", 403 to "attest", 429 to "rate")
 
 private const val HEARTBEAT_INTERVAL_MS = 240_000L
 private const val HEARTBEAT_TIMEOUT_MS = 30_000L
+
+/** The relay closes a socket whose text frame is larger than this (MAX_FRAME_BYTES). */
+private const val MAX_FRAME_BYTES = 4096
+
+/** The relay refuses a frame carrying more than this (MAX_RECORDS_PER_FRAME). */
+const val MAX_RECORDS_PER_FRAME = 32
+
+/**
+ * Records grouped into frames the relay accepts, by count and by encoded size.
+ *
+ * A signed status flip is around 300 bytes once encoded, so 32 of them are more than
+ * twice what one frame may carry, and the relay would close the socket for it.
+ */
+fun pages(records: List<RelayRecord>): List<List<RelayRecord>> {
+    val frameOverhead = "{\"t\":\"ops\",\"o\":[]}".length
+    val recordOverhead = "{\"d\":\"\",\"n\":,\"b\":\"\",\"a\":\"\"},".length
+    val result = mutableListOf<List<RelayRecord>>()
+    var page = mutableListOf<RelayRecord>()
+    var size = frameOverhead
+    for (record in records) {
+        val cost = recordOverhead + record.device.length + record.seq.toString().length +
+            record.blob.length + record.tag.length
+        if (page.isNotEmpty() && (size + cost > MAX_FRAME_BYTES || page.size == MAX_RECORDS_PER_FRAME)) {
+            result.add(page)
+            page = mutableListOf()
+            size = frameOverhead
+        }
+        page.add(record)
+        size += cost
+    }
+    if (page.isNotEmpty()) result.add(page)
+    return result
+}

@@ -84,7 +84,20 @@ data class SharedBuyPayload(
      * changes. Absent on changes written before the split, which order by seq as they
      * always did.
      */
-    @SerialName("l") val clock: Long? = null
+    @SerialName("l") val clock: Long? = null,
+    /**
+     * The author's Ed25519 public key, base64url. Only MEMBER_JOINED carries it.
+     *
+     * A device's first MEMBER_JOINED pins its key for the rest of the room: every later
+     * record from that device must carry a signature the key verifies, so a member
+     * holding the room key can no longer write as somebody else's device.
+     */
+    @SerialName("p") val publicKey: String? = null,
+    /**
+     * Ed25519 over SharedBuysCrypto.signInput, base64url. Absent from older builds, whose
+     * devices stay unsigned for the life of the room.
+     */
+    @SerialName("g") val signature: String? = null
 )
 
 @Serializable

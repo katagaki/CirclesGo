@@ -9,6 +9,7 @@ data class SharedBuysSnapshot(
     val sessionKey: String,
     val deviceId: String,
     val deviceAuthKey: String? = null,
+    val signingKey: String? = null,
     val eventNumber: Int,
     val lastSeq: Long,
     val changes: List<SharedBuyChange>,

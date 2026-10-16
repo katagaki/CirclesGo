@@ -107,6 +107,9 @@ dependencies {
     // Play Integrity (device attestation for the relay)
     implementation(libs.play.integrity)
 
+    // Tink (per-device record signatures)
+    implementation(libs.tink.android)
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
