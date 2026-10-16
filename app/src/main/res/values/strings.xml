@@ -210,6 +210,9 @@
     <string name="buys_shared_scan_to_join">Scan this code to join the shared list</string>
     <string name="buys_shared_members">Members</string>
     <string name="buys_shared_end">End sharing on this device</string>
+    <string name="buys_shared_remove">Remove</string>
+    <string name="buys_shared_rotate_key">Change join code</string>
+    <string name="buys_shared_rotate_key_explain">Moves everyone still here to a new code. Anyone who only has the old code, or who was removed, can no longer see the list.</string>
     <string name="buys_shared_you">You</string>
     <string name="buys_unknown_circle">Unknown circle (ID: %1$d)</string>
     <!-- Guest Mode -->
