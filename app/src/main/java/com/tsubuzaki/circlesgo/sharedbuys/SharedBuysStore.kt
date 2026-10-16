@@ -12,7 +12,10 @@ data class SharedBuysSnapshot(
     val eventNumber: Int,
     val lastSeq: Long,
     val changes: List<SharedBuyChange>,
-    val clock: Long? = null
+    val clock: Long? = null,
+    val agreementKey: String? = null,
+    val agreementPublicKey: String? = null,
+    val ownerDevice: String? = null
 )
 
 class SharedBuysStore(context: Context) {

@@ -117,12 +117,19 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         }
     }
 
-    fun disconnect() {
+    fun disconnect(records: List<RelayRecord> = emptyList()) {
         job?.cancel()
         job = null
         val socket = session
         session = null
-        if (socket != null) scope.launch { runCatching { socket.close() } }
+        if (socket != null) {
+            scope.launch {
+                runCatching {
+                    if (records.isNotEmpty()) socket.send(Frame.Text(opsFrame(records)))
+                    socket.close()
+                }
+            }
+        }
     }
 
     /**
@@ -143,7 +150,15 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             return
         }
         if (records.isEmpty()) return
-        val frame = buildJsonObject {
+        val frame = opsFrame(records)
+        scope.launch {
+            runCatching { socket.send(Frame.Text(frame)) }
+                .onFailure { onEvent(RelayEvent.Failed("send: ${it.message}")) }
+        }
+    }
+
+    private fun opsFrame(records: List<RelayRecord>): String =
+        buildJsonObject {
             put("t", "ops")
             put("o", kotlinx.serialization.json.buildJsonArray {
                 records.forEach { record ->
@@ -155,12 +170,7 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
                     })
                 }
             })
-        }
-        scope.launch {
-            runCatching { socket.send(Frame.Text(frame.toString())) }
-                .onFailure { onEvent(RelayEvent.Failed("send: ${it.message}")) }
-        }
-    }
+        }.toString()
 
     /**
      * Whether the room key may be handed to this relay.

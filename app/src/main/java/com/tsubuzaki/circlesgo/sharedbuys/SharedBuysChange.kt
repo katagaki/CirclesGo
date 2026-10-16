@@ -23,6 +23,8 @@ object SharedBuyKind {
      * reads the header off the log instead. Sent once per circle per room.
      */
     const val CIRCLE_INFO = 7
+    const val MEMBER_KEY = 8
+    const val REKEY = 9
 
     /**
      * Whether this kind is carried over the peer-to-peer Bluetooth path.
@@ -41,7 +43,7 @@ object SharedBuyKind {
      * in the deferred map instead, waiting for an addItem that would never make it
      * applicable, and the map grew for the life of the session.
      */
-    fun isKnown(kind: Int): Boolean = kind in ADD_ITEM..CIRCLE_INFO
+    fun isKnown(kind: Int): Boolean = kind in ADD_ITEM..REKEY
 }
 
 object SharedBuyStatus {
@@ -147,6 +149,8 @@ object SharedBuyFold {
                 // the deferred branch and are parked against an itemId that never arrives.
                 payload.kind == SharedBuyKind.MEMBER_JOINED -> Unit
                 payload.kind == SharedBuyKind.CIRCLE_INFO -> Unit
+                payload.kind == SharedBuyKind.MEMBER_KEY -> Unit
+                payload.kind == SharedBuyKind.REKEY -> Unit
                 !SharedBuyKind.isKnown(payload.kind) -> Unit
                 !byId.containsKey(payload.itemId) ->
                     deferred.getOrPut(payload.itemId) { mutableListOf() }.add(change)
@@ -190,6 +194,26 @@ object SharedBuyFold {
                     name = change.payload.text.orEmpty(),
                     space = change.payload.space
                 )
+            }
+        }
+        return result
+    }
+
+    fun memberKeys(changes: List<SharedBuyChange>): Map<String, ByteArray> {
+        val result = mutableMapOf<String, ByteArray>()
+        for (change in changes.sortedBy { it.seq }) {
+            if (change.payload.kind != SharedBuyKind.MEMBER_KEY) continue
+            val key = runCatching { change.payload.text?.fromBase64Url() }.getOrNull() ?: continue
+            result[change.device] = key
+        }
+        return result
+    }
+
+    fun deviceActors(changes: List<SharedBuyChange>): Map<String, Int> {
+        val result = mutableMapOf<String, Int>()
+        for (change in changes.sortedBy { it.seq }) {
+            if (change.payload.kind == SharedBuyKind.MEMBER_JOINED) {
+                result.putIfAbsent(change.device, change.payload.actor)
             }
         }
         return result

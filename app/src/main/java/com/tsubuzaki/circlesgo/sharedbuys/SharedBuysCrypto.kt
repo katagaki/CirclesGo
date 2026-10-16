@@ -1,8 +1,22 @@
 package com.tsubuzaki.circlesgo.sharedbuys
 
+import java.math.BigInteger
 import java.nio.ByteBuffer
+import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.PrivateKey
+import java.security.PublicKey
 import java.security.SecureRandom
+import java.security.interfaces.ECPrivateKey
+import java.security.interfaces.ECPublicKey
+import java.security.spec.ECGenParameterSpec
+import java.security.spec.ECParameterSpec
+import java.security.spec.ECPoint
+import java.security.spec.ECPrivateKeySpec
+import java.security.spec.ECPublicKeySpec
 import javax.crypto.Cipher
+import javax.crypto.KeyAgreement
 import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -13,6 +27,9 @@ object SharedBuysCrypto {
     const val OPS_INFO = "circles-buys/v1/ops"
     const val RELAY_AUTH_INFO = "circles-buys/v1/relay-auth"
     const val HANDSHAKE_INFO = "circles-buys/v1/ble-handshake"
+    const val REKEY_INFO = "circles-buys/v1/rekey"
+    const val PUBLIC_KEY_LENGTH = 65
+    private const val REKEY_PLAINTEXT_LENGTH = 36
     const val TAG_LENGTH = 16
     const val NONCE_LENGTH = 12
     val RANDOM_NONCE_MARKER = byteArrayOf(0x53, 0x42, 0x32, 0x00)
@@ -125,6 +142,79 @@ object SharedBuysCrypto {
         )
         cipher.updateAAD(associatedData(roomId, deviceId, seq))
         return cipher.doFinal(sealed)
+    }
+
+    private val p256: ECParameterSpec by lazy { (newAgreementKey().public as ECPublicKey).params }
+
+    fun newAgreementKey(): KeyPair =
+        KeyPairGenerator.getInstance("EC")
+            .apply { initialize(ECGenParameterSpec("secp256r1"), random) }
+            .generateKeyPair()
+
+    fun publicKeyBytes(key: PublicKey): ByteArray {
+        val point = (key as ECPublicKey).w
+        return byteArrayOf(4) + point.affineX.toFixed(32) + point.affineY.toFixed(32)
+    }
+
+    fun publicKey(bytes: ByteArray): PublicKey {
+        require(bytes.size == PUBLIC_KEY_LENGTH && bytes[0] == 4.toByte())
+        val point = ECPoint(
+            BigInteger(1, bytes.copyOfRange(1, 33)),
+            BigInteger(1, bytes.copyOfRange(33, PUBLIC_KEY_LENGTH))
+        )
+        return KeyFactory.getInstance("EC").generatePublic(ECPublicKeySpec(point, p256))
+    }
+
+    fun privateKeyBytes(key: PrivateKey): ByteArray = (key as ECPrivateKey).s.toFixed(32)
+
+    fun privateKey(bytes: ByteArray): PrivateKey =
+        KeyFactory.getInstance("EC").generatePrivate(ECPrivateKeySpec(BigInteger(1, bytes), p256))
+
+    fun sealRekey(
+        sessionKey: ByteArray,
+        ownerDevice: String,
+        publicKey: ByteArray,
+        roomId: String,
+        deviceId: String,
+        ephemeral: KeyPair = newAgreementKey(),
+        suppliedNonce: ByteArray? = null
+    ): ByteArray {
+        require(sessionKey.size == 32 && ownerDevice.length == 8)
+        val nonce = suppliedNonce ?: randomNonce(NONCE_LENGTH)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            Cipher.ENCRYPT_MODE,
+            SecretKeySpec(rekeyWrapKey(ephemeral.private, publicKey(publicKey)), "AES"),
+            GCMParameterSpec(128, nonce)
+        )
+        cipher.updateAAD(roomId.fromHex() + deviceId.fromHex())
+        return publicKeyBytes(ephemeral.public) + nonce + cipher.doFinal(sessionKey + ownerDevice.fromHex())
+    }
+
+    fun openRekey(box: ByteArray, privateKey: PrivateKey, roomId: String, deviceId: String): Pair<ByteArray, String> {
+        require(box.size == PUBLIC_KEY_LENGTH + NONCE_LENGTH + REKEY_PLAINTEXT_LENGTH + TAG_LENGTH)
+        val nonceEnd = PUBLIC_KEY_LENGTH + NONCE_LENGTH
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            SecretKeySpec(rekeyWrapKey(privateKey, publicKey(box.copyOfRange(0, PUBLIC_KEY_LENGTH))), "AES"),
+            GCMParameterSpec(128, box.copyOfRange(PUBLIC_KEY_LENGTH, nonceEnd))
+        )
+        cipher.updateAAD(roomId.fromHex() + deviceId.fromHex())
+        val plaintext = cipher.doFinal(box.copyOfRange(nonceEnd, box.size))
+        return plaintext.copyOfRange(0, 32) to plaintext.copyOfRange(32, REKEY_PLAINTEXT_LENGTH).toHex()
+    }
+
+    private fun rekeyWrapKey(privateKey: PrivateKey, publicKey: PublicKey): ByteArray {
+        val agreement = KeyAgreement.getInstance("ECDH")
+        agreement.init(privateKey)
+        agreement.doPhase(publicKey, true)
+        return derive(REKEY_INFO, agreement.generateSecret())
+    }
+
+    private fun BigInteger.toFixed(size: Int): ByteArray {
+        val raw = toByteArray()
+        return if (raw.size >= size) raw.copyOfRange(raw.size - size, raw.size) else ByteArray(size - raw.size) + raw
     }
 
     private fun legacyNonce(deviceId: String, seq: Long): ByteArray =
