@@ -14,6 +14,7 @@ lifecycle = "2.11.0"
 material3 = "1.5.0-alpha28"
 play-integrity = "1.6.0"
 serialization = "1.11.0"
+tink = "1.18.0"
 
 [libraries]
 # Kotlin & Coroutines
@@ -31,6 +32,9 @@ play-services-code-scanner = { module = "com.google.android.gms:play-services-co
 
 # Play Integrity (device attestation for the relay)
 play-integrity = { module = "com.google.android.play:integrity", version.ref = "play-integrity" }
+
+# Tink (Ed25519 record signatures; the platform only has Ed25519 from API 33)
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 
