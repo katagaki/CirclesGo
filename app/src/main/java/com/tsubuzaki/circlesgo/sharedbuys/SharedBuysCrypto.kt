@@ -1,5 +1,9 @@
 package com.tsubuzaki.circlesgo.sharedbuys
 
+import com.google.crypto.tink.subtle.Ed25519Sign
+import com.google.crypto.tink.subtle.Ed25519Verify
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -13,6 +17,7 @@ object SharedBuysCrypto {
     const val OPS_INFO = "circles-buys/v1/ops"
     const val RELAY_AUTH_INFO = "circles-buys/v1/relay-auth"
     const val HANDSHAKE_INFO = "circles-buys/v1/ble-handshake"
+    const val SIGN_INFO = "circles-buys/v1/sign"
     const val TAG_LENGTH = 16
     const val NONCE_LENGTH = 12
     val RANDOM_NONCE_MARKER = byteArrayOf(0x53, 0x42, 0x32, 0x00)
@@ -82,6 +87,57 @@ object SharedBuysCrypto {
         return hmac(relayAuthKey, input.array()).copyOf(TAG_LENGTH)
     }
 
+    fun newSigningKey(): ByteArray = Ed25519Sign.KeyPair.newKeyPair().privateKey
+
+    fun publicKey(signingKey: ByteArray): ByteArray =
+        Ed25519Sign.KeyPair.newKeyPairFromSeed(signingKey).publicKey
+
+    /**
+     * What a record's signature covers: the room, the author's (device, seq) and every
+     * payload field but the signature, in a fixed binary layout.
+     *
+     * Not the JSON or the blob. A peer answering a want re-seals other devices' changes
+     * under a fresh nonce and re-encodes the payload, so neither survives forwarding, but
+     * these fields do.
+     */
+    fun signInput(roomId: String, deviceId: String, seq: Long, payload: SharedBuyPayload): ByteArray {
+        val bytes = ByteArrayOutputStream()
+        val out = DataOutputStream(bytes)
+        fun text(value: String) {
+            val utf8 = value.toByteArray(Charsets.UTF_8)
+            out.writeInt(utf8.size)
+            out.write(utf8)
+        }
+        fun <T> optional(value: T?, write: (T) -> Unit) {
+            if (value == null) {
+                out.writeByte(0)
+            } else {
+                out.writeByte(1)
+                write(value)
+            }
+        }
+        out.write(SIGN_INFO.toByteArray())
+        out.writeByte(0)
+        out.write(roomId.fromHex())
+        out.write(deviceId.fromHex())
+        out.writeLong(seq)
+        out.writeLong(payload.actor.toLong())
+        out.writeLong(payload.kind.toLong())
+        text(payload.itemId)
+        out.writeLong(payload.circleId.toLong())
+        optional(payload.text) { text(it) }
+        optional(payload.value) { out.writeLong(it.toLong()) }
+        optional(payload.space) { text(it) }
+        optional(payload.clock) { out.writeLong(it) }
+        optional(payload.publicKey) { text(it) }
+        return bytes.toByteArray()
+    }
+
+    fun sign(input: ByteArray, signingKey: ByteArray): ByteArray = Ed25519Sign(signingKey).sign(input)
+
+    fun verifies(signature: ByteArray, input: ByteArray, publicKey: ByteArray): Boolean =
+        runCatching { Ed25519Verify(publicKey).verify(signature, input) }.isSuccess
+
     fun seal(
         plaintext: ByteArray,
         contentKey: ByteArray,
@@ -142,6 +198,67 @@ object SharedBuysCrypto {
         mac.init(SecretKeySpec(key, "HmacSHA256"))
         return mac.doFinal(message)
     }
+}
+
+/**
+ * Which key, if any, each device in the room signs with.
+ *
+ * A device's first MEMBER_JOINED decides it: one carrying a public key pins that key, one
+ * without marks a device running a build from before signatures, whose records are taken
+ * on the room key alone as they always were. A device whose MEMBER_JOINED has not arrived
+ * is unknown, and nothing it wrote is adopted yet -- whichever copy reached us first would
+ * otherwise win, forged or not. Its records come again, since the version vector never
+ * claimed them.
+ */
+class SharedBuySigners(changes: List<SharedBuyChange>) {
+
+    private sealed interface Signer {
+        class Key(val bytes: ByteArray) : Signer
+        data object Unsigned : Signer
+    }
+
+    private val byDevice = mutableMapOf<String, Signer>()
+
+    init {
+        for (change in changes.sortedBy { it.seq }) {
+            if (change.payload.kind != SharedBuyKind.MEMBER_JOINED || change.device in byDevice) continue
+            signer(change.payload)?.let { byDevice[change.device] = it }
+        }
+    }
+
+    /** Whether the change may enter the log, learning its device's key if it introduces one. */
+    fun admit(change: SharedBuyChange, roomId: String): Boolean =
+        when (val known = byDevice[change.device]) {
+            is Signer.Key -> verifies(change, roomId, known.bytes)
+            Signer.Unsigned -> true
+            null -> {
+                val announced = if (change.payload.kind == SharedBuyKind.MEMBER_JOINED) {
+                    signer(change.payload)
+                } else {
+                    null
+                }
+                val admitted = announced != null &&
+                    (announced !is Signer.Key || verifies(change, roomId, announced.bytes))
+                if (admitted) byDevice[change.device] = announced!!
+                admitted
+            }
+        }
+
+    private fun signer(payload: SharedBuyPayload): Signer? {
+        val encoded = payload.publicKey ?: return Signer.Unsigned
+        val key = runCatching { encoded.fromBase64Url() }.getOrNull()
+        return if (key != null && key.size == 32) Signer.Key(key) else null
+    }
+
+    private fun verifies(change: SharedBuyChange, roomId: String, publicKey: ByteArray): Boolean =
+        runCatching {
+            val signature = change.payload.signature?.fromBase64Url() ?: return false
+            SharedBuysCrypto.verifies(
+                signature,
+                SharedBuysCrypto.signInput(roomId, change.device, change.seq, change.payload),
+                publicKey
+            )
+        }.getOrDefault(false)
 }
 
 /** The two keys every record needs, derived once per room rather than per record. */
