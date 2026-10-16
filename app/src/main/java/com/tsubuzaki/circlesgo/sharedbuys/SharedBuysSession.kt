@@ -53,6 +53,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     var deviceId by mutableStateOf("")
         private set
     private var deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
+    private var agreementKey = SharedBuysCrypto.newAgreementKey()
+    var ownerDevice: String? by mutableStateOf(null)
+        private set
+    private var isRekeying = false
     private var signingKey = SharedBuysCrypto.newSigningKey()
     private var eventNumber = 0
     private var lastSeq = 0L
@@ -74,6 +78,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private val ingestLock = kotlinx.coroutines.sync.Mutex()
 
     val isActive: Boolean get() = sessionKey != null
+
+    val isOwner: Boolean get() = ownerDevice != null && ownerDevice == deviceId
+
+    val canRotateKey: Boolean get() = isOwner && status == "connected"
 
     val roomId: String? get() = sessionKey?.let { SharedBuysCrypto.roomId(it) }
 
@@ -145,7 +153,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
     val joinUrl: String?
         get() = sessionKey?.let {
-            "circles-app://$JOIN_HOST?v=1&e=$eventNumber&k=${it.toBase64Url()}"
+            "circles-app://$JOIN_HOST?v=1&e=$eventNumber&k=${it.toBase64Url()}" +
+                (ownerDevice?.let { owner -> "&o=$owner" } ?: "")
         }
 
     /**
@@ -262,6 +271,13 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         sessionKey = snapshot.sessionKey.fromBase64Url()
         deviceId = snapshot.deviceId
         deviceAuthKey = snapshot.deviceAuthKey?.fromBase64Url() ?: SharedBuysCrypto.newDeviceAuthKey()
+        agreementKey = runCatching {
+            java.security.KeyPair(
+                SharedBuysCrypto.agreementPublicKey(snapshot.agreementPublicKey!!.fromBase64Url()),
+                SharedBuysCrypto.privateKey(snapshot.agreementKey!!.fromBase64Url())
+            )
+        }.getOrElse { SharedBuysCrypto.newAgreementKey() }
+        ownerDevice = snapshot.ownerDevice
         signingKey = snapshot.signingKey?.fromBase64Url() ?: SharedBuysCrypto.newSigningKey()
         eventNumber = snapshot.eventNumber
         lastSeq = snapshot.lastSeq
@@ -270,6 +286,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         changes.addAll(snapshot.changes)
         clock = snapshot.clock ?: (changes.maxOfOrNull { it.order } ?: 0L)
         invalidateFold()
+        val announced = SharedBuyFold.memberKeys(changes)[deviceId]
+        if (announced?.contentEquals(SharedBuysCrypto.publicKeyBytes(agreementKey.public)) != true) {
+            announceAgreementKey()
+        }
         note("restored room $roomId as $deviceId")
         SharedBuysLiveUpdateService.start(context)
         // A restored session reported isActive but had no transport behind it: the relay
@@ -308,18 +328,8 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     }
 
     fun start(eventNumber: Int, nickname: String) {
-        sessionKey = SharedBuysCrypto.newSessionKey()
-        deviceId = SharedBuysCrypto.newDeviceId()
-        deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
-        signingKey = SharedBuysCrypto.newSigningKey()
-        this.eventNumber = eventNumber
-        lastSeq = 0
-        clock = 0
-        changes.clear()
-        sealed.clear()
-        invalidateFold()
-        persist()
-        append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
+        val device = SharedBuysCrypto.newDeviceId()
+        enter(SharedBuysCrypto.newSessionKey(), device, device, eventNumber, nickname)
         note("started room $roomId as $deviceId")
         SharedBuysLiveUpdateService.start(context)
         connect()
@@ -330,13 +340,25 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         val raw = uri.getQueryParameter("k") ?: return note("bad join link")
         val key = runCatching { raw.fromBase64Url() }.getOrNull()
         if (key == null || key.size != 32) return note("bad join link")
+        val owner = uri.getQueryParameter("o")?.takeIf { it.matches(Regex("^[0-9a-f]{8}$")) }
         // Joining a second room is leaving the first.
         if (isActive) leave()
+        val event = uri.getQueryParameter("e")?.toIntOrNull() ?: 0
+        enter(key, SharedBuysCrypto.newDeviceId(), owner, event, nickname)
+        note("joined room $roomId as $deviceId")
+        SharedBuysLiveUpdateService.start(context)
+        connect()
+        startBluetooth()
+    }
+
+    private fun enter(key: ByteArray, device: String, owner: String?, event: Int, nickname: String) {
         sessionKey = key
-        deviceId = SharedBuysCrypto.newDeviceId()
+        deviceId = device
         deviceAuthKey = SharedBuysCrypto.newDeviceAuthKey()
+        agreementKey = SharedBuysCrypto.newAgreementKey()
+        ownerDevice = owner
+        eventNumber = event
         signingKey = SharedBuysCrypto.newSigningKey()
-        eventNumber = uri.getQueryParameter("e")?.toIntOrNull() ?: 0
         lastSeq = 0
         clock = 0
         changes.clear()
@@ -344,10 +366,87 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         invalidateFold()
         persist()
         append(SharedBuyKind.MEMBER_JOINED, "-", 0, nickname, actorPid)
-        note("joined room $roomId as $deviceId")
-        SharedBuysLiveUpdateService.start(context)
+        announceAgreementKey()
+    }
+
+    private fun announceAgreementKey() {
+        val publicKey = SharedBuysCrypto.publicKeyBytes(agreementKey.public).toBase64Url()
+        append(SharedBuyKind.MEMBER_KEY, "-", 0, publicKey, null)
+    }
+
+    fun rotateKey(removing: Int? = null) {
+        if (!canRotateKey) return
+        val key = sessionKey ?: return
+        val room = roomId ?: return
+        val actors = SharedBuyFold.deviceActors(changes)
+        val recipients = SharedBuyFold.memberKeys(changes).filter { (device, _) ->
+            device != deviceId && (removing == null || actors[device] != removing)
+        }
+        val newKey = SharedBuysCrypto.newSessionKey()
+        val newDevice = SharedBuysCrypto.newDeviceId()
+        val carriedItems = items
+        val carriedMembers = members
+        val carriedCircles = circles
+        isRekeying = true
+        val records = recipients.entries.sortedBy { it.key }.mapNotNull { (device, publicKey) ->
+            val box = runCatching {
+                SharedBuysCrypto.sealRekey(newKey, newDevice, publicKey, room, device)
+            }.getOrNull() ?: return@mapNotNull null
+            append(SharedBuyKind.REKEY, device, 0, box.toBase64Url(), null)?.let { seal(it, key, room) }
+        }
+        migrate(newKey, newDevice, newDevice, records)
+        val kept = recipients.keys.mapNotNull { actors[it] }.toSet()
+        carriedMembers.entries.sortedBy { it.key }
+            .filter { it.key != actorPid && it.key in kept }
+            .forEach { append(SharedBuyKind.MEMBER_JOINED, "-", 0, it.value, it.key, actor = it.key) }
+        carriedCircles.values.sortedBy { it.id }.forEach {
+            append(SharedBuyKind.CIRCLE_INFO, "-", it.id, it.name, null, it.space)
+        }
+        carriedItems.forEach { item ->
+            val actor = item.lastTouchedBy
+            append(SharedBuyKind.ADD_ITEM, item.id, item.circleId, item.name, item.cost, actor = actor)
+            if (item.status != SharedBuyStatus.PENDING) {
+                append(SharedBuyKind.SET_STATUS, item.id, item.circleId, null, item.status, actor = actor)
+            }
+            item.assignee?.let {
+                append(SharedBuyKind.SET_ASSIGNEE, item.id, item.circleId, null, it, actor = actor)
+            }
+        }
+        isRekeying = false
+        note("re-keyed ${records.size} members into room $roomId")
         connect()
         startBluetooth()
+    }
+
+    private fun followRekeys(added: List<SharedBuyChange>) {
+        val owner = ownerDevice ?: return
+        if (isOwner) return
+        val rekey = added.firstOrNull {
+            it.payload.kind == SharedBuyKind.REKEY && it.payload.itemId == deviceId && it.device == owner
+        } ?: return
+        val room = roomId ?: return
+        val opened = runCatching {
+            SharedBuysCrypto.openRekey(rekey.payload.text!!.fromBase64Url(), agreementKey.private, room, deviceId)
+        }.getOrNull() ?: return note("could not open re-key")
+        isRekeying = true
+        migrate(opened.first, SharedBuysCrypto.newDeviceId(), opened.second)
+        isRekeying = false
+        note("followed re-key into room $roomId")
+        connect()
+        startBluetooth()
+    }
+
+    private fun migrate(key: ByteArray, device: String, owner: String, records: List<RelayRecord> = emptyList()) {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempt = 0
+        flushJob?.cancel()
+        flushJob = null
+        outbox.clear()
+        stopBluetooth()
+        relay.disconnect(records)
+        status = "idle"
+        enter(key, device, owner, eventNumber, nickname)
     }
 
     fun leave() {
@@ -500,7 +599,39 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
 
         checkHandshake(notConfused = SharedBuysHandshake.parse(frames.first()) == null)
         checkWire()
+        checkRekey()
         checkSignatures()
+    }
+
+    private fun checkRekey() {
+        val room = SharedBuysCrypto.roomId(ByteArray(32) { it.toByte() })
+        val newKey = ByteArray(32) { (0xff - it).toByte() }
+        val result = runCatching {
+            val recipient = SharedBuysCrypto.privateKey(ByteArray(32) { (it + 1).toByte() })
+            val ephemeral = java.security.KeyPair(
+                SharedBuysCrypto.agreementPublicKey(REKEY_EPHEMERAL_PUBLIC.fromHex()),
+                SharedBuysCrypto.privateKey(ByteArray(32) { (0x21 + it).toByte() })
+            )
+            val box = SharedBuysCrypto.sealRekey(
+                newKey,
+                "a1b2c3d4",
+                REKEY_RECIPIENT_PUBLIC.fromHex(),
+                room,
+                "cafebabe",
+                ephemeral,
+                ByteArray(SharedBuysCrypto.NONCE_LENGTH) { 0x11 }
+            )
+            val vector = box.copyOfRange(box.size - 52, box.size).toHex() == REKEY_SEALED
+            val opened = SharedBuysCrypto.openRekey(box, recipient, room, "cafebabe")
+            val stranger = runCatching {
+                SharedBuysCrypto.openRekey(box, SharedBuysCrypto.newAgreementKey().private, room, "cafebabe")
+            }.isFailure
+            vector to (opened.first.contentEquals(newKey) && opened.second == "a1b2c3d4" && stranger)
+        }.getOrNull()
+        note(
+            "rekey vector ${if (result?.first == true) "ok" else "FAILED"} " +
+                "open ${if (result?.second == true) "ok" else "FAILED"}"
+        )
     }
 
     /**
@@ -678,16 +809,19 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         circleId: Int,
         text: String?,
         value: Int?,
-        space: String? = null
-    ) {
-        val key = sessionKey ?: return
-        val room = roomId ?: return
+        space: String? = null,
+        actor: Int? = null
+    ): SharedBuyChange? {
+        val key = sessionKey ?: return null
+        val room = roomId ?: return null
         // A guest holds the room key and could append anything the relay would accept.
         // The restriction is the app honouring its own role, not something the log can
         // enforce -- see isGuest. MEMBER_JOINED is how a guest appears in the members
         // list at all, so it is allowed alongside the status flips they are here for.
-        if (isGuest && kind != SharedBuyKind.SET_STATUS && kind != SharedBuyKind.MEMBER_JOINED) {
-            return
+        if (isGuest && kind != SharedBuyKind.SET_STATUS && kind != SharedBuyKind.MEMBER_JOINED &&
+            kind != SharedBuyKind.MEMBER_KEY
+        ) {
+            return null
         }
         lastSeq += 1
         clock += 1
@@ -696,7 +830,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         } else {
             null
         }
-        val unsigned = SharedBuyPayload(actorPid, kind, itemId, circleId, text, value, space, clock, publicKey)
+        val unsigned = SharedBuyPayload(actor ?: actorPid, kind, itemId, circleId, text, value, space, clock, publicKey)
         val signature = SharedBuysCrypto.sign(
             SharedBuysCrypto.signInput(room, deviceId, lastSeq, unsigned),
             signingKey
@@ -709,9 +843,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         changes.add(change)
         invalidateFold()
         persist()
-        seal(change, key, room)?.let { enqueue(it) }
+        seal(change, key, room)?.let { if (!isRekeying) enqueue(it) }
         sendOverBluetooth(listOf(change))
         bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
+        return change
     }
 
     /** Holds a record briefly so a burst of edits leaves as one frame. */
@@ -915,7 +1050,7 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
     private fun adopt(opened: List<SharedBuyChange>) {
         if (opened.isEmpty()) return
         val known = changes.mapTo(mutableSetOf()) { it.id }
-        var added = 0
+        val added = mutableListOf<SharedBuyChange>()
         for (change in opened) {
             // A batch can carry the same record twice — a relay echo, or a want reply
             // overlapping the live stream — so the set has to grow as we append.
@@ -926,13 +1061,14 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             clock = maxOf(clock, change.order)
             // Our own change coming back means a save was lost; never reuse its seq.
             if (change.device == deviceId) lastSeq = maxOf(lastSeq, change.seq)
-            added += 1
+            added.add(change)
         }
-        if (added > 0) {
+        if (added.isNotEmpty()) {
             invalidateFold()
             persist()
             bluetooth.update(SharedBuysDigest.bytes(bluetoothDigestVector))
-            note("received $added")
+            note("received ${added.size}")
+            followRekeys(added)
         }
     }
 
@@ -978,7 +1114,10 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
             eventNumber = eventNumber,
             lastSeq = lastSeq,
             changes = changes.toList(),
-            clock = clock
+            clock = clock,
+            agreementKey = SharedBuysCrypto.privateKeyBytes(agreementKey.private).toBase64Url(),
+            agreementPublicKey = SharedBuysCrypto.publicKeyBytes(agreementKey.public).toBase64Url(),
+            ownerDevice = ownerDevice
         )
     }
 
@@ -1006,6 +1145,15 @@ class SharedBuysSession(private val context: Context, private val scope: Corouti
         private const val RESEND_PAGE_DELAY_MS = 600L
         private const val STORAGE_FULL_SLUG = "storage"
         private const val STORAGE_FULL_CODE = 4005
+        private const val REKEY_RECIPIENT_PUBLIC =
+            "04515c3d6eb9e396b904d3feca7f54fdcd0cc1e997bf375dca515ad0a6c3b4035f" +
+                "4536be3a50f318fbf9a5475902a221502bef0d57e08c53b2cc0a56f17d9f9354"
+        private const val REKEY_EPHEMERAL_PUBLIC =
+            "041f140146bfb1b251f84f4ddbe0d4cdcfd77afd984a9520e35794021f8312bb9e" +
+                "ec995a08b1fa7704df3dcc0b50a9665263fb7711f95f9f8a449c5096e47c892b"
+        private const val REKEY_SEALED =
+            "4968b067252cb291c8edd8244e1269fd7740abbf41ebf4e842663ebb" +
+                "0b89fbce886e51c8036b9e64d95c57379e5bcf35fac8aba9"
         private const val MAX_STORED_RECORDS = 500L
 
     }

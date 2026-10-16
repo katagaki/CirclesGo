@@ -208,6 +208,9 @@
     <string name="buys_shared_scan_to_join">このQRコードを読み取ると、共同購入リストに参加できます</string>
     <string name="buys_shared_members">参加者</string>
     <string name="buys_shared_end">共同購入リストから退出</string>
+    <string name="buys_shared_remove">外す</string>
+    <string name="buys_shared_rotate_key">参加コードを変更</string>
+    <string name="buys_shared_rotate_key_explain">残っているメンバー全員を新しいコードに移します。古いコードしか持っていない人や外された人は、リストを見られなくなります。</string>
     <string name="buys_shared_you">あなた</string>
     <string name="buys_unknown_circle">不明なサークル（ID：%1$d）</string>
     <!-- Guest Mode -->

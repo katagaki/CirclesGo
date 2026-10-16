@@ -117,12 +117,19 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
         }
     }
 
-    fun disconnect() {
+    fun disconnect(records: List<RelayRecord> = emptyList()) {
         job?.cancel()
         job = null
         val socket = session
         session = null
-        if (socket != null) scope.launch { runCatching { socket.close() } }
+        if (socket != null) {
+            scope.launch {
+                runCatching {
+                    pages(records).forEach { socket.send(Frame.Text(opsFrame(it))) }
+                    socket.close()
+                }
+            }
+        }
     }
 
     /**
@@ -142,29 +149,31 @@ class SharedBuysRelay(private val context: Context, private val scope: Coroutine
             onEvent(RelayEvent.Failed("no socket"))
             return
         }
-        val frames = pages(records).map { page ->
-            buildJsonObject {
-                put("t", "ops")
-                put("o", kotlinx.serialization.json.buildJsonArray {
-                    page.forEach { record ->
-                        add(buildJsonObject {
-                            put("d", record.device)
-                            put("n", record.seq)
-                            put("b", record.blob)
-                            put("a", record.tag)
-                        })
-                    }
-                })
-            }
-        }
+        if (records.isEmpty()) return
+        val frames = pages(records).map(::opsFrame)
         scope.launch {
             for (frame in frames) {
-                val sent = runCatching { socket.send(Frame.Text(frame.toString())) }
+                val sent = runCatching { socket.send(Frame.Text(frame)) }
                     .onFailure { onEvent(RelayEvent.Failed("send: ${it.message}")) }
                 if (sent.isFailure) break
             }
         }
     }
+
+    private fun opsFrame(records: List<RelayRecord>): String =
+        buildJsonObject {
+            put("t", "ops")
+            put("o", kotlinx.serialization.json.buildJsonArray {
+                records.forEach { record ->
+                    add(buildJsonObject {
+                        put("d", record.device)
+                        put("n", record.seq)
+                        put("b", record.blob)
+                        put("a", record.tag)
+                    })
+                }
+            })
+        }.toString()
 
     /**
      * Whether the room key may be handed to this relay.

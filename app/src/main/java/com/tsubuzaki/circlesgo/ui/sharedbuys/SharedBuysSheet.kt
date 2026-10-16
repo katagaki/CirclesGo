@@ -67,9 +67,32 @@ fun SharedBuysSheet(session: SharedBuysSession, onDismiss: () -> Unit) {
                     Modifier.size(10.dp)
                     Text(
                         text = "  ${member.value}",
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
                     )
+                    if (session.isOwner && member.key != session.actorPid) {
+                        TextButton(
+                            onClick = { session.rotateKey(removing = member.key) },
+                            enabled = session.canRotateKey
+                        ) {
+                            Text(
+                                text = stringResource(R.string.buys_shared_remove),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
+            }
+            if (session.isOwner) {
+                TextButton(onClick = { session.rotateKey() }, enabled = session.canRotateKey) {
+                    Text(text = stringResource(R.string.buys_shared_rotate_key))
+                }
+                Text(
+                    text = stringResource(R.string.buys_shared_rotate_key_explain),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
             TextButton(onClick = {
                 session.leave()
